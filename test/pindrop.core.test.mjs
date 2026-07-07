@@ -81,3 +81,19 @@ test('pageVer: meta wins, stamp fallback, else 0', () => {
     .PINDROP.pageVer(), 4);
   assert.equal(boot().PINDROP.pageVer(), 0);
 });
+
+test('cssPath: id short-circuit + nth-of-type only when needed; round-trips', () => {
+  const w = boot({ html: '<div id="root"><ul><li>a</li><li>b</li><li>c</li></ul><p>solo</p></div>' });
+  const li2 = w.document.querySelectorAll('li')[1];
+  const sel = w.PINDROP.cssPath(li2);
+  assert.equal(sel, '#root > ul > li:nth-of-type(2)');
+  assert.equal(w.document.querySelector(sel), li2);
+  assert.equal(w.PINDROP.cssPath(w.document.querySelector('p')), '#root > p');
+});
+
+test('pinXY: falls back to xr/y when selector missing or unresolvable', () => {
+  const w = boot();
+  assert.deepEqual({ ...w.PINDROP.pinXY({ xr: .5, y: 200 }) }, { x: null, y: 200, anchored: false });
+  assert.deepEqual({ ...w.PINDROP.pinXY({ xr: .5, y: 200, anchor: { sel: '#nope', ox: .5, oy: .5 } }) },
+    { x: null, y: 200, anchored: false });
+});
