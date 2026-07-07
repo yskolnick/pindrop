@@ -56,3 +56,28 @@ test('lifecycle: auto-mounts when pins exist for the current key, even unarmed',
   const w = boot({ armed: false, seed: { 'pd:/lab/demo/#a': JSON.stringify([{ xr: .1, y: 1, w: 390, note: 'n' }]) } });
   assert.equal(w.pindrop.mounted, true);
 });
+
+test('normPin: legacy pin gets v:1, ver:0, generated id; fields preserved', () => {
+  const w = boot();
+  const p = w.PINDROP.normPin({ xr: .1, y: 5, w: 390, note: 'n', extra: 'kept' });
+  assert.equal(p.v, 1);
+  assert.equal(p.ver, 0);
+  assert.match(p.id, /^p[a-z0-9]+$/);
+  assert.equal(p.extra, 'kept');
+});
+
+test('normPin: idempotent on v2 pins; drops non-objects', () => {
+  const w = boot();
+  const v2 = { v: 2, id: 'pfixed', xr: .1, y: 5, w: 390, note: 'n', ver: 4 };
+  assert.deepEqual(w.PINDROP.normPin({ ...v2 }), v2);
+  assert.equal(w.PINDROP.normPin(null), null);
+  assert.equal(w.PINDROP.normPin('str'), null);
+});
+
+test('pageVer: meta wins, stamp fallback, else 0', () => {
+  assert.equal(boot({ html: '<meta name="pd-version" content="7"><div class="stamp">Demo - v4 - 2026-07-07</div>' })
+    .PINDROP.pageVer(), 7);
+  assert.equal(boot({ html: '<div class="stamp">Lab - profile-redesign - v4 - 2026-07-07</div>' })
+    .PINDROP.pageVer(), 4);
+  assert.equal(boot().PINDROP.pageVer(), 0);
+});
