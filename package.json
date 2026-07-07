@@ -1,0 +1,10 @@
+{
+  "name": "pindrop-dev-harness",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.0"
+  }
+}
