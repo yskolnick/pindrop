@@ -56,8 +56,24 @@
     if (val) v[hash] = val; else delete v[hash];
     if (Object.keys(v).length) localStorage.setItem(vKey(), JSON.stringify(v)); else localStorage.removeItem(vKey());
   }
-  function loadQuestions() { return []; }
-  function allQuestions() { return {}; }
+  function qKey() { return 'pd-q:' + location.pathname + location.hash; }
+  function loadQuestions() { try { return JSON.parse(localStorage.getItem(qKey()) || '[]') || []; } catch (e) { return []; } }
+  function saveAnswer(id, text) {
+    var qs = loadQuestions();
+    for (var i = 0; i < qs.length; i++) if (qs[i].id === id) { qs[i].answer = text; qs[i].answeredT = Date.now(); }
+    localStorage.setItem(qKey(), JSON.stringify(qs));
+  }
+  function allQuestions() {
+    var base = 'pd-q:' + location.pathname, out = {};
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k === base || (k && k.indexOf(base + '#') === 0)) {
+        var arr; try { arr = JSON.parse(localStorage.getItem(k) || '[]'); } catch (e) { arr = []; }
+        if (arr && arr.length) out[k.slice(base.length) || '(page)'] = arr;
+      }
+    }
+    return out;
+  }
 
   function loadPins() {
     try { pins = (JSON.parse(localStorage.getItem(KEY) || '[]') || []).map(normPin).filter(Boolean); }
@@ -165,8 +181,27 @@
       });
       layer.appendChild(d);
     });
-    nEl.textContent = pins.length + (pins.length === 1 ? ' note' : ' notes');
-    if (copyAllBtn) { var tot = allBuckets().reduce(function (n, b) { return n + b.pins.length; }, 0); copyAllBtn.style.display = tot > 0 ? '' : 'none'; }
+    var qs = loadQuestions();
+    qs.forEach(function (q, i) {
+      var qp = questionPin(q);
+      var xy = pinXY(qp);
+      var d = document.createElement('button');
+      d.type = 'button';
+      d.className = 'pd-pin pd-q' + (q.answer ? ' pd-q-done' : '');
+      d.textContent = 'Q' + (i + 1);
+      d.title = q.q;
+      d.style.left = xy.anchored ? (xy.x + 'px') : (qp.xr * 100) + '%';
+      d.style.top = xy.y + 'px';
+      d.addEventListener('click', function (e) { e.stopPropagation(); openQuestionPop(q); });
+      layer.appendChild(d);
+    });
+    nEl.textContent = pins.length + (pins.length === 1 ? ' note' : ' notes') + (qs.length ? ' · ' + qs.length + ' Q' : '');
+    if (copyAllBtn) {
+      var qBuckets = allQuestions();
+      var qTotal = Object.keys(qBuckets).reduce(function (n, k) { return n + qBuckets[k].length; }, 0);
+      var tot = allBuckets().reduce(function (n, b) { return n + b.pins.length; }, 0) + qTotal;
+      copyAllBtn.style.display = tot > 0 ? '' : 'none';
+    }
     paintVerdict();
   }
 
@@ -244,6 +279,28 @@
         closePop();
       }, { once: true });
     }, { once: true });
+  }
+  function questionPin(q) {
+    return {
+      anchor: q.sel ? { sel: q.sel, ox: .5, oy: .5 } : null,
+      xr: q.xr || .5,
+      y: q.y || 200
+    };
+  }
+  function openQuestionPop(q) {
+    var el = popShell(questionPin(q));
+    el.innerHTML = '<p class="pd-note">' + esc(q.q) + '</p>' +
+      '<textarea></textarea>' +
+      '<div class="r"><button type="button" class="c">Close</button><button type="button" class="p saveq">Save answer</button></div>';
+    var ta = el.querySelector('textarea');
+    ta.value = q.answer || '';
+    ta.focus();
+    el.querySelector('.c').addEventListener('click', closePop);
+    el.querySelector('.saveq').addEventListener('click', function () {
+      saveAnswer(q.id, ta.value.trim());
+      render();
+      closePop();
+    });
   }
 
   function today() { return new Date().toISOString().slice(0, 10); }
@@ -343,6 +400,8 @@
       'font:800 11px/1 ui-sans-serif,system-ui,sans-serif;box-shadow:0 4px 14px -4px rgba(0,0,0,.5);cursor:pointer}' +
       '.pd-pin.pd-stale{background:#FCFAF7;color:#8a8378;border-color:#8a8378}' +
       '.pd-pin.pd-done{background:#2E7D4F}' +
+      '.pd-pin.pd-q{background:#2C5FA8;width:auto;min-width:24px;border-radius:12px;padding:0 4px}' +
+      '.pd-pin.pd-q.pd-q-done{background:#FCFAF7;color:#2C5FA8;border-color:#2C5FA8}' +
       '.pd-form{position:absolute;z-index:99991;width:min(260px,80vw);background:#FCFAF7;color:#221F1B;border:1px solid #E7E0D6;' +
       'border-radius:12px;padding:10px;box-shadow:0 18px 50px -18px rgba(0,0,0,.45);font:400 13px/1.4 ui-sans-serif,system-ui,sans-serif}' +
       '.pd-form textarea{width:100%;box-sizing:border-box;min-height:64px;border:1px solid #E7E0D6;border-radius:8px;padding:7px;' +
@@ -410,9 +469,11 @@
 
     bar.querySelector('.pd-copyall').addEventListener('click', function () {
       var buckets = allBuckets();
-      var total = buckets.reduce(function (n, b) { return n + b.pins.length; }, 0);
+      var qsAll = allQuestions();
+      var total = buckets.reduce(function (n, b) { return n + b.pins.length; }, 0) +
+        Object.keys(qsAll).reduce(function (n, k) { return n + qsAll[k].length; }, 0);
       if (!total) { nEl.textContent = 'No notes yet'; setTimeout(render, 1400); return; }
-      writeOut(buildCopyAll(buckets, getVerdicts(), allQuestions(), ctxNow()), 'Copied all ' + total + '!');
+      writeOut(buildCopyAll(buckets, getVerdicts(), qsAll, ctxNow()), 'Copied all ' + total + '!');
     });
 
     bar.querySelector('.pd-clear').addEventListener('click', function () {
@@ -468,6 +529,9 @@
     whoName: whoName,
     getVerdicts: getVerdicts,
     setVerdict: setVerdict,
+    loadQuestions: loadQuestions,
+    allQuestions: allQuestions,
+    saveAnswer: saveAnswer,
     cssPath: cssPath,
     anchorAt: anchorAt,
     pinXY: pinXY

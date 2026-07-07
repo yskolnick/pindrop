@@ -128,3 +128,21 @@ test('resolved pins: render done state and dismiss from popover', () => {
   w.document.querySelector('.dismiss').click();
   assert.equal(JSON.parse(w.localStorage.getItem('pd:/lab/demo/#a')).length, 0);
 });
+
+test('questions: load current-variant key; saveAnswer persists in place', () => {
+  const w = boot({ seed: { 'pd-q:/lab/demo/#a': JSON.stringify([{ id: 'q1', q: 'CTA above the fold?', answer: '', answeredT: 0 }]) } });
+  assert.equal(w.PINDROP.loadQuestions().length, 1);
+  w.PINDROP.saveAnswer('q1', 'Yes');
+  const stored = JSON.parse(w.localStorage.getItem('pd-q:/lab/demo/#a'));
+  assert.equal(stored[0].answer, 'Yes');
+  assert.ok(stored[0].answeredT > 0);
+});
+
+test('allQuestions: groups by variant for the current pathname only', () => {
+  const w = boot({ seed: {
+    'pd-q:/lab/demo/#a': JSON.stringify([{ id: 'q1', q: 'A?' }]),
+    'pd-q:/lab/demo/#b': JSON.stringify([{ id: 'q2', q: 'B?' }]),
+    'pd-q:/lab/other/#a': JSON.stringify([{ id: 'q3', q: 'other?' }]),
+  } });
+  assert.deepEqual(Object.keys(w.PINDROP.allQuestions()).sort(), ['#a', '#b']);
+});
