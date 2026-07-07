@@ -56,6 +56,39 @@
     }
     .button { background: var(--accent); color: white; }
     .ghost { color: var(--ink); border: 1px solid var(--line); background: white; }
+    .tools {
+      display: grid;
+      gap: 10px;
+      max-width: 560px;
+      margin-top: 26px;
+    }
+    .bookmarklet-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .bm {
+      display: inline-flex;
+      align-items: center;
+      min-height: 38px;
+      border-radius: 8px;
+      background: var(--ink);
+      color: white;
+      padding: 0 13px;
+      font-weight: 800;
+      text-decoration: none;
+    }
+    .tools input {
+      width: 100%;
+      min-height: 38px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: white;
+      padding: 8px 10px;
+      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
     .demo {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -174,6 +207,13 @@
       <div class="actions">
         <a class="button" href="./?pd=1">Try with pins on</a>
         <a class="ghost" href="./SPEC.md">Read the spec</a>
+      </div>
+      <div class="tools" aria-label="Bookmarklet">
+        <div class="bookmarklet-row">
+          <a class="bm" href="javascript:(function(){if(window.pindrop){pindrop.mount();return}var s=document.createElement('script');s.src='https://yskolnick.github.io/pindrop/pindrop.js?v=1';s.onload=function(){window.pindrop&&window.pindrop.mount()};document.documentElement.appendChild(s)})()">pindrop</a>
+          <span>Drag to bookmarks, then click on any page.</span>
+        </div>
+        <input readonly onclick="this.select()" value="javascript:(function(){if(window.pindrop){pindrop.mount();return}var s=document.createElement('script');s.src='https://yskolnick.github.io/pindrop/pindrop.js?v=1';s.onload=function(){window.pindrop&&window.pindrop.mount()};document.documentElement.appendChild(s)})()">
       </div>
     </section>
 

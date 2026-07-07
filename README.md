@@ -30,6 +30,16 @@ The release notes will publish the `sha384` hash. Do not use an unpinned CDN pat
 Open the page with `?pd=1`, choose **Add note**, click the page, write the note, then use **Copy**,
 **Copy all**, or **Send**. Pins persist in that browser for the reviewed page and variant.
 
+## Use On Any Page
+
+Bookmarklet: drag the `pindrop` bookmarklet from the demo page to your bookmarks bar. Click it on any
+page to start pinning. Sites with a strict Content-Security-Policy can block bookmarklet script
+injection.
+
+Agent route: see [SPEC section 7](SPEC.md#7---injection-modes-and-mount-lifecycle). A Playwright
+agent can use `PLAYWRIGHT_MCP_INIT_SCRIPT` or `browser_run_code_unsafe` with
+`page.context().addInitScript({ path })`; the overlay stays dormant until `pindrop.mount()` is called.
+
 ## Page Contract
 
 Pages can optionally provide:
