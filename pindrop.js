@@ -200,5 +200,6 @@
   // switching variant tabs (#a / #b) re-keys to that variant's own notes
   window.addEventListener('hashchange', function () { KEY = keyFor(); loadPins(); render(); });
 
+  if (window.__PINDROP_TEST__) window.PINDROP = { keyFor: keyFor, fmtPin: fmtPin, allBuckets: allBuckets };
   render();
 })();
