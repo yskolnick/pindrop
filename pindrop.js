@@ -29,7 +29,7 @@
   var qs = new URLSearchParams(location.search);
   if (qs.has('pd') || qs.has('fb')) sessionStorage.setItem('pd-on', '1');
 
-  var pins = [], adding = false, layer = null, bar = null, nEl = null, addBtn = null, copyAllBtn = null;
+  var pins = [], adding = false, layer = null, bar = null, nEl = null, addBtn = null, copyAllBtn = null, pop = null;
 
   function pinId() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
   function normPin(p) {
@@ -149,8 +149,9 @@
       var xy = pinXY(p);
       d.style.left = xy.anchored ? (xy.x + 'px') : (p.xr * 100) + '%';
       d.style.top = xy.y + 'px';
-      d.addEventListener('click', function () {
-        if (confirm('Remove note ' + (i + 1) + '? — ' + p.note)) { pins.splice(i, 1); save(); render(); }
+      d.addEventListener('click', function (e) {
+        e.stopPropagation();
+        openPinPop(p, i);
       });
       layer.appendChild(d);
     });
@@ -183,6 +184,43 @@
       }
       f.remove();
     });
+  }
+
+  function closePop() { if (pop) { pop.remove(); pop = null; } }
+  function popShell(p) {
+    closePop();
+    var xy = pinXY(p);
+    var x = xy.anchored ? xy.x : p.xr * document.documentElement.scrollWidth;
+    pop = document.createElement('div');
+    pop.className = 'pd-form';
+    pop.style.left = Math.min(x, window.scrollX + window.innerWidth - 290) + 'px';
+    pop.style.top = (xy.y + 14) + 'px';
+    document.body.appendChild(pop);
+    return pop;
+  }
+  function openPinPop(p, i) {
+    var el = popShell(p), pv = pageVer(), meta = [];
+    if (p.ver > 0) meta.push('v' + p.ver + (pv > p.ver ? ' — page is v' + pv : ''));
+    if (p.who) meta.push(p.who);
+    if (p.state) meta.push(p.state);
+    el.innerHTML = '<div class="pd-meta">' + esc(meta.join(' · ')) + '</div>' +
+      '<p class="pd-note">' + esc(p.note) + '</p>' +
+      '<div class="r"><button type="button" class="del">Delete</button>' +
+      '<button type="button" class="c">Close</button><button type="button" class="p e">Edit</button></div>';
+    el.querySelector('.del').addEventListener('click', function () { pins.splice(i, 1); save(); render(); closePop(); });
+    el.querySelector('.c').addEventListener('click', closePop);
+    el.querySelector('.e').addEventListener('click', function () {
+      var noteEl = el.querySelector('.pd-note');
+      if (!noteEl) return;
+      var ta = document.createElement('textarea'); ta.value = p.note;
+      noteEl.replaceWith(ta); ta.focus();
+      var btn = el.querySelector('.e'); btn.textContent = 'Save';
+      btn.addEventListener('click', function () {
+        var t = ta.value.trim();
+        if (t) { p.note = t; save(); render(); }
+        closePop();
+      }, { once: true });
+    }, { once: true });
   }
 
   function today() { return new Date().toISOString().slice(0, 10); }
@@ -284,6 +322,9 @@
       'font:inherit;resize:vertical;background:#fff;color:#221F1B}' +
       '.pd-form .r{display:flex;gap:6px;justify-content:flex-end;margin-top:7px}' +
       '.pd-form button{font:700 12px/1 ui-sans-serif,system-ui,sans-serif;border:0;border-radius:8px;padding:7px 11px;cursor:pointer;background:#F1EBE2;color:#221F1B}' +
+      '.pd-meta{font:600 11px/1.3 ui-sans-serif,system-ui,sans-serif;color:#8a8378;margin-bottom:4px}' +
+      '.pd-note{margin:0 0 8px}' +
+      '.pd-form .del{background:#F1EBE2;color:#A82D46}' +
       '.pd-form button.p{background:#A82D46;color:#fff}';
     document.head.appendChild(css);
 
@@ -317,6 +358,12 @@
       adding = false; addBtn.dataset.on = ''; document.body.classList.remove('pd-aim');
       form(e.pageX, e.pageY);
     }, true);
+    document.addEventListener('click', function (e) {
+      if (pop && !e.target.closest('.pd-form,.pd-pin')) closePop();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closePop();
+    });
 
     bar.querySelector('.pd-copy').addEventListener('click', function () {
       syncKey();
