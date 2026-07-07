@@ -198,8 +198,7 @@
     nEl.textContent = pins.length + (pins.length === 1 ? ' note' : ' notes') + (qs.length ? ' · ' + qs.length + ' Q' : '');
     if (copyAllBtn) {
       var qBuckets = allQuestions();
-      var qTotal = Object.keys(qBuckets).reduce(function (n, k) { return n + qBuckets[k].length; }, 0);
-      var tot = allBuckets().reduce(function (n, b) { return n + b.pins.length; }, 0) + qTotal;
+      var tot = feedbackTotal(allBuckets(), qBuckets);
       copyAllBtn.style.display = tot > 0 ? '' : 'none';
     }
     paintVerdict();
@@ -350,6 +349,17 @@
       return sec;
     }).join('');
   }
+  function waUrl(text) {
+    var prefix = 'https://wa.me/?text=', mark = '\n…(truncated — use Copy all)';
+    if ((prefix + encodeURIComponent(text)).length <= 6000) return prefix + encodeURIComponent(text);
+    var lines = text.split('\n');
+    while (lines.length > 1 && (prefix + encodeURIComponent(lines.join('\n') + mark)).length > 6000) lines.pop();
+    return prefix + encodeURIComponent(lines.join('\n') + mark);
+  }
+  function feedbackTotal(buckets, qsAll) {
+    return buckets.reduce(function (n, b) { return n + b.pins.length; }, 0) +
+      Object.keys(qsAll).reduce(function (n, k) { return n + qsAll[k].length; }, 0);
+  }
   function writeOut(out, okLabel) {
     (navigator.clipboard ? navigator.clipboard.writeText(out) : Promise.reject()).then(
       function () { nEl.textContent = okLabel; setTimeout(render, 1200); },
@@ -427,6 +437,7 @@
       '<button type="button" class="pd-add">+ Add note</button>' +
       '<button type="button" class="pd-copy">Copy</button>' +
       '<button type="button" class="pd-copyall">Copy all</button>' +
+      '<button type="button" class="pd-send">Send</button>' +
       '<button type="button" class="pd-clear">Clear</button>' +
       '<button type="button" class="pd-x" aria-label="Hide feedback bar">✕</button>';
     document.body.appendChild(bar);
@@ -470,10 +481,19 @@
     bar.querySelector('.pd-copyall').addEventListener('click', function () {
       var buckets = allBuckets();
       var qsAll = allQuestions();
-      var total = buckets.reduce(function (n, b) { return n + b.pins.length; }, 0) +
-        Object.keys(qsAll).reduce(function (n, k) { return n + qsAll[k].length; }, 0);
+      var total = feedbackTotal(buckets, qsAll);
       if (!total) { nEl.textContent = 'No notes yet'; setTimeout(render, 1400); return; }
       writeOut(buildCopyAll(buckets, getVerdicts(), qsAll, ctxNow()), 'Copied all ' + total + '!');
+    });
+
+    bar.querySelector('.pd-send').addEventListener('click', function () {
+      var buckets = allBuckets();
+      var qsAll = allQuestions();
+      var total = feedbackTotal(buckets, qsAll);
+      if (!total) { nEl.textContent = 'No notes yet'; setTimeout(render, 1400); return; }
+      var u = waUrl(buildCopyAll(buckets, getVerdicts(), qsAll, ctxNow()));
+      var win = window.open(u, '_blank');
+      if (!win) location.href = u;
     });
 
     bar.querySelector('.pd-clear').addEventListener('click', function () {
@@ -524,6 +544,7 @@
     ctxNow: ctxNow,
     buildCopy: buildCopy,
     buildCopyAll: buildCopyAll,
+    waUrl: waUrl,
     cap: cap,
     esc: esc,
     whoName: whoName,

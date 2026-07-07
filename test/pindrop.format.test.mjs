@@ -44,3 +44,12 @@ test('buildCopy (single variant): v1-identical when no v2 context applies', () =
   assert.equal(w.PINDROP.buildCopy([v1], [], { path: '/lab/demo/', hash: '#a', date: '2026-07-08', pageVer: 0, who: '' }),
     'Design feedback · /lab/demo/#a · 2026-07-08\n1. [42% across, 830px down, viewport 390px, near "Alex Example"] {Viewport: Mobile} Make the headline bigger');
 });
+
+test('waUrl: encodes; truncates whole lines over budget with marker', () => {
+  const w = boot();
+  assert.equal(w.PINDROP.waUrl('a b\nc'), 'https://wa.me/?text=' + encodeURIComponent('a b\nc'));
+  const big = Array.from({ length: 400 }, (_, i) => `line ${i} with some padding text`).join('\n');
+  const url = w.PINDROP.waUrl(big);
+  assert.ok(url.length <= 6000);
+  assert.ok(decodeURIComponent(url.slice('https://wa.me/?text='.length)).endsWith('…(truncated — use Copy all)'));
+});
