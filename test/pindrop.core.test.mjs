@@ -110,3 +110,11 @@ test('who: first note form asks once and persists optional reviewer name', () =>
   assert.equal(w.localStorage.getItem('pd-who'), 'Yosef');
   assert.equal(JSON.parse(w.localStorage.getItem('pd:/lab/demo/#a'))[0].who, 'Yosef');
 });
+
+test('verdicts: set/unset round-trips; key removed when empty', () => {
+  const w = boot();
+  w.PINDROP.setVerdict('#a', 'winner');
+  assert.deepEqual({ ...w.PINDROP.getVerdicts() }, { '#a': 'winner' });
+  w.PINDROP.setVerdict('#a', null);
+  assert.equal(w.localStorage.getItem('pd-v:/lab/demo/'), null);
+});

@@ -29,7 +29,7 @@
   var qs = new URLSearchParams(location.search);
   if (qs.has('pd') || qs.has('fb')) sessionStorage.setItem('pd-on', '1');
 
-  var pins = [], adding = false, layer = null, bar = null, nEl = null, addBtn = null, copyAllBtn = null, pop = null;
+  var pins = [], adding = false, layer = null, bar = null, nEl = null, addBtn = null, copyAllBtn = null, verdictEl = null, pop = null;
 
   function pinId() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
   function normPin(p) {
@@ -49,7 +49,13 @@
   function ctxNow() { return { path: location.pathname, hash: location.hash, date: today(), pageVer: pageVer(), who: whoName() }; }
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
-  function getVerdicts() { return {}; }
+  function vKey() { return 'pd-v:' + location.pathname; }
+  function getVerdicts() { try { return JSON.parse(localStorage.getItem(vKey()) || '{}') || {}; } catch (e) { return {}; } }
+  function setVerdict(hash, val) {
+    var v = getVerdicts();
+    if (val) v[hash] = val; else delete v[hash];
+    if (Object.keys(v).length) localStorage.setItem(vKey(), JSON.stringify(v)); else localStorage.removeItem(vKey());
+  }
   function loadQuestions() { return []; }
   function allQuestions() { return {}; }
 
@@ -157,6 +163,7 @@
     });
     nEl.textContent = pins.length + (pins.length === 1 ? ' note' : ' notes');
     if (copyAllBtn) { var tot = allBuckets().reduce(function (n, b) { return n + b.pins.length; }, 0); copyAllBtn.style.display = tot > 0 ? '' : 'none'; }
+    paintVerdict();
   }
 
   function form(x, y) {
@@ -313,6 +320,9 @@
       'background:#3a352f;color:#FCFAF7}' +
       '.pd-bar button.pd-add{background:#A82D46;color:#fff}' +
       '.pd-bar button.pd-add[data-on="1"]{outline:2px solid #fff}' +
+      '.pd-verdict{display:flex;gap:4px}' +
+      '.pd-verdict button{padding:6px 9px}' +
+      '.pd-verdict button[data-on="1"]{background:#A82D46;color:#fff}' +
       '.pd-bar button:focus-visible{outline:2.5px solid #E5798C;outline-offset:2px}' +
       'body.pd-aim{cursor:crosshair}' +
       '.pd-pin{position:absolute;z-index:99980;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;' +
@@ -340,6 +350,7 @@
     bar = document.createElement('div');
     bar.className = 'pd-bar';
     bar.innerHTML = '<span class="pd-n"></span>' +
+      '<span class="pd-verdict"><button type="button" data-vv="winner">Win</button><button type="button" data-vv="kill">Kill</button><button type="button" data-vv="meh">Meh</button></span>' +
       '<button type="button" class="pd-add">+ Add note</button>' +
       '<button type="button" class="pd-copy">Copy</button>' +
       '<button type="button" class="pd-copyall">Copy all</button>' +
@@ -349,11 +360,19 @@
     nEl = bar.querySelector('.pd-n');
     addBtn = bar.querySelector('.pd-add');
     copyAllBtn = bar.querySelector('.pd-copyall');
+    verdictEl = bar.querySelector('.pd-verdict');
 
     addBtn.addEventListener('click', function () {
       adding = !adding;
       addBtn.dataset.on = adding ? '1' : '';
       document.body.classList.toggle('pd-aim', adding);
+    });
+    verdictEl.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-vv]');
+      if (!btn || !/^#[a-z0-9]{1,8}$/i.test(location.hash)) return;
+      var active = btn.getAttribute('data-on') === '1';
+      setVerdict(location.hash, active ? null : btn.getAttribute('data-vv'));
+      paintVerdict();
     });
 
     document.addEventListener('click', function (e) {
@@ -390,12 +409,12 @@
       sessionStorage.removeItem('pd-on');
       if (bar) bar.remove();
       if (layer) layer.remove();
-      bar = layer = nEl = addBtn = copyAllBtn = null;
+      bar = layer = nEl = addBtn = copyAllBtn = verdictEl = null;
       api.mounted = false;
       document.body.classList.remove('pd-aim');
     });
 
-    window.addEventListener('hashchange', function () { KEY = keyFor(); loadPins(); render(); });
+    window.addEventListener('hashchange', function () { KEY = keyFor(); loadPins(); render(); paintVerdict(); });
     loadPins();
     render();
   }
@@ -405,6 +424,16 @@
     api.mounted = true;
     sessionStorage.setItem('pd-on', '1');
     build();
+  }
+
+  function paintVerdict() {
+    if (!verdictEl) return;
+    var ok = /^#[a-z0-9]{1,8}$/i.test(location.hash);
+    verdictEl.style.display = ok ? '' : 'none';
+    var v = getVerdicts()[location.hash] || '';
+    Array.prototype.forEach.call(verdictEl.querySelectorAll('[data-vv]'), function (btn) {
+      btn.dataset.on = btn.getAttribute('data-vv') === v ? '1' : '';
+    });
   }
 
   var api = { version: '2.0.0', mounted: false, mount: mount };
@@ -423,6 +452,8 @@
     cap: cap,
     esc: esc,
     whoName: whoName,
+    getVerdicts: getVerdicts,
+    setVerdict: setVerdict,
     cssPath: cssPath,
     anchorAt: anchorAt,
     pinXY: pinXY
