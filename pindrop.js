@@ -164,7 +164,8 @@
     f.className = 'pd-form';
     f.style.left = Math.min(x, window.scrollX + window.innerWidth - 290) + 'px';
     f.style.top = (y + 10) + 'px';
-    f.innerHTML = '<textarea placeholder="What should change here?"></textarea>' +
+    f.innerHTML = (localStorage.getItem('pd-who') === null ? '<input class="pd-who" placeholder="Your name (optional)" maxlength="24">' : '') +
+      '<textarea placeholder="What should change here?"></textarea>' +
       '<div class="r"><button type="button" class="c">Cancel</button><button type="button" class="p">Save note</button></div>';
     document.body.appendChild(f);
     var ta = f.querySelector('textarea');
@@ -174,6 +175,8 @@
       var note = ta.value.trim();
       if (note) {
         syncKey();
+        var wEl = f.querySelector('.pd-who');
+        if (wEl) localStorage.setItem('pd-who', wEl.value.trim());
         pins.push(normPin({
           v: 2, id: pinId(), t: Date.now(),
           xr: x / document.documentElement.scrollWidth, y: y, near: nearText(x, y),
@@ -320,6 +323,8 @@
       'border-radius:12px;padding:10px;box-shadow:0 18px 50px -18px rgba(0,0,0,.45);font:400 13px/1.4 ui-sans-serif,system-ui,sans-serif}' +
       '.pd-form textarea{width:100%;box-sizing:border-box;min-height:64px;border:1px solid #E7E0D6;border-radius:8px;padding:7px;' +
       'font:inherit;resize:vertical;background:#fff;color:#221F1B}' +
+      '.pd-form input{width:100%;box-sizing:border-box;border:1px solid #E7E0D6;border-radius:8px;padding:7px;margin-bottom:7px;' +
+      'font:inherit;background:#fff;color:#221F1B}' +
       '.pd-form .r{display:flex;gap:6px;justify-content:flex-end;margin-top:7px}' +
       '.pd-form button{font:700 12px/1 ui-sans-serif,system-ui,sans-serif;border:0;border-radius:8px;padding:7px 11px;cursor:pointer;background:#F1EBE2;color:#221F1B}' +
       '.pd-meta{font:600 11px/1.3 ui-sans-serif,system-ui,sans-serif;color:#8a8378;margin-bottom:4px}' +

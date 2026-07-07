@@ -97,3 +97,16 @@ test('pinXY: falls back to xr/y when selector missing or unresolvable', () => {
   assert.deepEqual({ ...w.PINDROP.pinXY({ xr: .5, y: 200, anchor: { sel: '#nope', ox: .5, oy: .5 } }) },
     { x: null, y: 200, anchored: false });
 });
+
+test('who: first note form asks once and persists optional reviewer name', () => {
+  const w = boot();
+  w.document.elementFromPoint = () => w.document.body;
+  w.document.querySelector('.pd-add').click();
+  w.document.body.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true, clientX: 12, clientY: 20 }));
+  assert.ok(w.document.querySelector('.pd-who'));
+  w.document.querySelector('.pd-who').value = 'Yosef';
+  w.document.querySelector('.pd-form textarea').value = 'Make this bigger';
+  w.document.querySelector('.pd-form .p').click();
+  assert.equal(w.localStorage.getItem('pd-who'), 'Yosef');
+  assert.equal(JSON.parse(w.localStorage.getItem('pd:/lab/demo/#a'))[0].who, 'Yosef');
+});
