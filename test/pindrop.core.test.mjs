@@ -118,3 +118,13 @@ test('verdicts: set/unset round-trips; key removed when empty', () => {
   w.PINDROP.setVerdict('#a', null);
   assert.equal(w.localStorage.getItem('pd-v:/lab/demo/'), null);
 });
+
+test('resolved pins: render done state and dismiss from popover', () => {
+  const pin = { v: 2, id: 'p1', xr: .2, y: 100, w: 390, note: 'Make it bigger', ver: 4, resolved: { ver: 5, note: 'Done' } };
+  const w = boot({ seed: { 'pd:/lab/demo/#a': JSON.stringify([pin]) } });
+  assert.ok(w.document.querySelector('.pd-pin.pd-done'));
+  w.document.querySelector('.pd-pin').click();
+  assert.match(w.document.querySelector('.pd-form').textContent, /Resolved in v5/);
+  w.document.querySelector('.dismiss').click();
+  assert.equal(JSON.parse(w.localStorage.getItem('pd:/lab/demo/#a')).length, 0);
+});

@@ -152,6 +152,10 @@
         d.classList.add('pd-stale');
         d.title = p.note + ' — from v' + p.ver + ' (page is v' + pv + ')';
       }
+      if (p.resolved) {
+        d.classList.add('pd-done');
+        d.title = p.note + ' — resolved in v' + p.resolved.ver;
+      }
       var xy = pinXY(p);
       d.style.left = xy.anchored ? (xy.x + 'px') : (p.xr * 100) + '%';
       d.style.top = xy.y + 'px';
@@ -213,6 +217,15 @@
     if (p.ver > 0) meta.push('v' + p.ver + (pv > p.ver ? ' — page is v' + pv : ''));
     if (p.who) meta.push(p.who);
     if (p.state) meta.push(p.state);
+    if (p.resolved) {
+      el.innerHTML = '<div class="pd-meta">' + esc(meta.join(' · ')) + '</div>' +
+        '<p class="pd-note">' + esc(p.note) + '</p>' +
+        '<p class="pd-meta">✓ Resolved in v' + p.resolved.ver + (p.resolved.note ? ': ' + esc(p.resolved.note) : '') + '</p>' +
+        '<div class="r"><button type="button" class="dismiss">Dismiss</button><button type="button" class="c">Close</button></div>';
+      el.querySelector('.dismiss').addEventListener('click', function () { pins.splice(i, 1); save(); render(); closePop(); });
+      el.querySelector('.c').addEventListener('click', closePop);
+      return;
+    }
     el.innerHTML = '<div class="pd-meta">' + esc(meta.join(' · ')) + '</div>' +
       '<p class="pd-note">' + esc(p.note) + '</p>' +
       '<div class="r"><button type="button" class="del">Delete</button>' +
@@ -329,6 +342,7 @@
       'background:#A82D46;color:#fff;border:2px solid #fff;display:grid;place-items:center;' +
       'font:800 11px/1 ui-sans-serif,system-ui,sans-serif;box-shadow:0 4px 14px -4px rgba(0,0,0,.5);cursor:pointer}' +
       '.pd-pin.pd-stale{background:#FCFAF7;color:#8a8378;border-color:#8a8378}' +
+      '.pd-pin.pd-done{background:#2E7D4F}' +
       '.pd-form{position:absolute;z-index:99991;width:min(260px,80vw);background:#FCFAF7;color:#221F1B;border:1px solid #E7E0D6;' +
       'border-radius:12px;padding:10px;box-shadow:0 18px 50px -18px rgba(0,0,0,.45);font:400 13px/1.4 ui-sans-serif,system-ui,sans-serif}' +
       '.pd-form textarea{width:100%;box-sizing:border-box;min-height:64px;border:1px solid #E7E0D6;border-radius:8px;padding:7px;' +
