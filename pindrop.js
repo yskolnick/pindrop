@@ -5,11 +5,47 @@
   'use strict';
   if (window.pindrop) return;
 
+  function storage(name) {
+    try { return window[name] || null; } catch (e) { return null; }
+  }
+  function lsGet(k) {
+    var s = storage('localStorage');
+    try { return s ? s.getItem(k) : null; } catch (e) { return null; }
+  }
+  function lsSet(k, v) {
+    var s = storage('localStorage');
+    try { if (s) s.setItem(k, v); } catch (e) {}
+  }
+  function lsRemove(k) {
+    var s = storage('localStorage');
+    try { if (s) s.removeItem(k); } catch (e) {}
+  }
+  function lsLength() {
+    var s = storage('localStorage');
+    try { return s ? s.length : 0; } catch (e) { return 0; }
+  }
+  function lsKey(i) {
+    var s = storage('localStorage');
+    try { return s ? s.key(i) : null; } catch (e) { return null; }
+  }
+  function ssGet(k) {
+    var s = storage('sessionStorage');
+    try { return s ? s.getItem(k) : null; } catch (e) { return null; }
+  }
+  function ssSet(k, v) {
+    var s = storage('sessionStorage');
+    try { if (s) s.setItem(k, v); } catch (e) {}
+  }
+  function ssRemove(k) {
+    var s = storage('sessionStorage');
+    try { if (s) s.removeItem(k); } catch (e) {}
+  }
+
   function migrateLegacy() {
     try {
       var moves = [], i, k;
-      for (i = 0; i < localStorage.length; i++) {
-        k = localStorage.key(i);
+      for (i = 0; i < lsLength(); i++) {
+        k = lsKey(i);
         if (!k) continue;
         if (k.indexOf('zp-fb:') === 0) moves.push([k, 'pd:' + k.slice(6)]);
         else if (k.indexOf('zp-fb-v:') === 0) moves.push([k, 'pd-v:' + k.slice(8)]);
@@ -17,8 +53,8 @@
         else if (k === 'zp-fb-who') moves.push([k, 'pd-who']);
       }
       moves.forEach(function (m) {
-        if (localStorage.getItem(m[1]) == null) localStorage.setItem(m[1], localStorage.getItem(m[0]));
-        localStorage.removeItem(m[0]);
+        if (lsGet(m[1]) == null) lsSet(m[1], lsGet(m[0]));
+        lsRemove(m[0]);
       });
     } catch (e) {}
   }
@@ -27,7 +63,8 @@
   function keyFor() { return 'pd:' + location.pathname + location.hash; }
   var KEY = keyFor();
   var qs = new URLSearchParams(location.search);
-  if (qs.has('pd') || qs.has('fb')) sessionStorage.setItem('pd-on', '1');
+  var queryArmed = qs.has('pd') || qs.has('fb');
+  if (queryArmed) ssSet('pd-on', '1');
 
   var pins = [], adding = false, layer = null, bar = null, nEl = null, addBtn = null, copyAllBtn = null, verdictEl = null, pop = null;
 
@@ -45,30 +82,30 @@
     if (s) { var mt = (s.textContent || '').match(/\bv(\d+)\b/); if (mt) return +mt[1]; }
     return 0;
   }
-  function whoName() { return localStorage.getItem('pd-who') || ''; }
+  function whoName() { return lsGet('pd-who') || ''; }
   function ctxNow() { return { path: location.pathname, hash: location.hash, date: today(), pageVer: pageVer(), who: whoName() }; }
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
   function vKey() { return 'pd-v:' + location.pathname; }
-  function getVerdicts() { try { return JSON.parse(localStorage.getItem(vKey()) || '{}') || {}; } catch (e) { return {}; } }
+  function getVerdicts() { try { return JSON.parse(lsGet(vKey()) || '{}') || {}; } catch (e) { return {}; } }
   function setVerdict(hash, val) {
     var v = getVerdicts();
     if (val) v[hash] = val; else delete v[hash];
-    if (Object.keys(v).length) localStorage.setItem(vKey(), JSON.stringify(v)); else localStorage.removeItem(vKey());
+    if (Object.keys(v).length) lsSet(vKey(), JSON.stringify(v)); else lsRemove(vKey());
   }
   function qKey() { return 'pd-q:' + location.pathname + location.hash; }
-  function loadQuestions() { try { return JSON.parse(localStorage.getItem(qKey()) || '[]') || []; } catch (e) { return []; } }
+  function loadQuestions() { try { return JSON.parse(lsGet(qKey()) || '[]') || []; } catch (e) { return []; } }
   function saveAnswer(id, text) {
     var qs = loadQuestions();
     for (var i = 0; i < qs.length; i++) if (qs[i].id === id) { qs[i].answer = text; qs[i].answeredT = Date.now(); }
-    localStorage.setItem(qKey(), JSON.stringify(qs));
+    lsSet(qKey(), JSON.stringify(qs));
   }
   function allQuestions() {
     var base = 'pd-q:' + location.pathname, out = {};
-    for (var i = 0; i < localStorage.length; i++) {
-      var k = localStorage.key(i);
+    for (var i = 0; i < lsLength(); i++) {
+      var k = lsKey(i);
       if (k === base || (k && k.indexOf(base + '#') === 0)) {
-        var arr; try { arr = JSON.parse(localStorage.getItem(k) || '[]'); } catch (e) { arr = []; }
+        var arr; try { arr = JSON.parse(lsGet(k) || '[]'); } catch (e) { arr = []; }
         if (arr && arr.length) out[k.slice(base.length) || '(page)'] = arr;
       }
     }
@@ -76,11 +113,11 @@
   }
 
   function loadPins() {
-    try { pins = (JSON.parse(localStorage.getItem(KEY) || '[]') || []).map(normPin).filter(Boolean); }
+    try { pins = (JSON.parse(lsGet(KEY) || '[]') || []).map(normPin).filter(Boolean); }
     catch (e) { pins = []; }
   }
   function syncKey() { var k = keyFor(); if (k !== KEY) { KEY = k; loadPins(); } }
-  function save() { localStorage.setItem(KEY, JSON.stringify(pins)); }
+  function save() { lsSet(KEY, JSON.stringify(pins)); }
 
   function nearText(x, y) {
     if (layer) layer.style.pointerEvents = 'none';
@@ -209,7 +246,7 @@
     f.className = 'pd-form';
     f.style.left = Math.min(x, window.scrollX + window.innerWidth - 290) + 'px';
     f.style.top = (y + 10) + 'px';
-    f.innerHTML = (localStorage.getItem('pd-who') === null ? '<input class="pd-who" placeholder="Your name (optional)" maxlength="24">' : '') +
+    f.innerHTML = (lsGet('pd-who') === null ? '<input class="pd-who" placeholder="Your name (optional)" maxlength="24">' : '') +
       '<textarea placeholder="What should change here?"></textarea>' +
       '<div class="r"><button type="button" class="c">Cancel</button><button type="button" class="p">Save note</button></div>';
     document.body.appendChild(f);
@@ -221,7 +258,7 @@
       if (note) {
         syncKey();
         var wEl = f.querySelector('.pd-who');
-        if (wEl) localStorage.setItem('pd-who', wEl.value.trim());
+        if (wEl) lsSet('pd-who', wEl.value.trim());
         pins.push(normPin({
           v: 2, id: pinId(), t: Date.now(),
           xr: x / document.documentElement.scrollWidth, y: y, near: nearText(x, y),
@@ -369,10 +406,10 @@
 
   function allBuckets() {
     var base = 'pd:' + location.pathname, out = [];
-    for (var i = 0; i < localStorage.length; i++) {
-      var k = localStorage.key(i);
+    for (var i = 0; i < lsLength(); i++) {
+      var k = lsKey(i);
       if (k === base || (k && k.indexOf(base + '#') === 0)) {
-        var arr; try { arr = (JSON.parse(localStorage.getItem(k) || '[]') || []).map(normPin).filter(Boolean); } catch (e) { arr = []; }
+        var arr; try { arr = (JSON.parse(lsGet(k) || '[]') || []).map(normPin).filter(Boolean); } catch (e) { arr = []; }
         if (arr && arr.length) out.push({ variant: k.slice(base.length) || '(page)', pins: arr });
       }
     }
@@ -385,8 +422,8 @@
   }
 
   function armed() {
-    return !!(sessionStorage.getItem('pd-on') || localStorage.getItem(keyFor()) ||
-      localStorage.getItem('pd-q:' + location.pathname + location.hash));
+    return !!(queryArmed || ssGet('pd-on') || lsGet(keyFor()) ||
+      lsGet('pd-q:' + location.pathname + location.hash));
   }
 
   function build() {
@@ -501,7 +538,7 @@
     });
 
     bar.querySelector('.pd-x').addEventListener('click', function () {
-      sessionStorage.removeItem('pd-on');
+      ssRemove('pd-on');
       if (bar) bar.remove();
       if (layer) layer.remove();
       bar = layer = nEl = addBtn = copyAllBtn = verdictEl = null;
@@ -517,7 +554,7 @@
   function mount() {
     if (api.mounted) return;
     api.mounted = true;
-    sessionStorage.setItem('pd-on', '1');
+    ssSet('pd-on', '1');
     build();
   }
 

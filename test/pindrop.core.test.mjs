@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { JSDOM } from 'jsdom';
 import { boot, src } from './helpers.mjs';
 
 test('keyFor composes pathname + hash', () => {
@@ -55,6 +56,29 @@ test('lifecycle: dormant when unarmed; mount() arms and builds once; double-eval
 test('lifecycle: auto-mounts when pins exist for the current key, even unarmed', () => {
   const w = boot({ armed: false, seed: { 'pd:/lab/demo/#a': JSON.stringify([{ xr: .1, y: 1, w: 390, note: 'n' }]) } });
   assert.equal(w.pindrop.mounted, true);
+});
+
+test('lifecycle: storage-blocked pages still expose API and mount from query', () => {
+  const dom = new JSDOM('<!doctype html><html><body><main><h1>Demo</h1></main></body></html>',
+    { url: 'https://example.test/lab/demo/?pd=1#a', runScripts: 'outside-only', pretendToBeVisual: true });
+  const { window } = dom;
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    get() { throw new window.DOMException('blocked', 'SecurityError'); },
+  });
+  Object.defineProperty(window, 'sessionStorage', {
+    configurable: true,
+    get() { throw new window.DOMException('blocked', 'SecurityError'); },
+  });
+  window.__PINDROP_TEST__ = 1;
+
+  assert.doesNotThrow(() => window.eval(src));
+  if (window.document.readyState === 'loading') {
+    window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
+  }
+  assert.ok(window.pindrop);
+  assert.equal(window.pindrop.mounted, true);
+  assert.equal(window.document.querySelectorAll('.pd-bar').length, 1);
 });
 
 test('normPin: legacy pin gets v:1, ver:0, generated id; fields preserved', () => {
