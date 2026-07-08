@@ -254,3 +254,107 @@ test('allQuestions: groups by variant for the current pathname only', () => {
   } });
   assert.deepEqual(Object.keys(w.PINDROP.allQuestions()).sort(), ['#a', '#b']);
 });
+
+test('reviewFilename is safe and reviewFile contains exact packet JSON', async () => {
+  const w = boot();
+  const packet = { reviewId: 'r123', exportedAt: '2026-07-08T12:00:00.000Z' };
+  assert.equal(w.PINDROP.reviewFilename(packet), 'pindrop-example.test-2026-07-08-r123.json');
+  const file = w.PINDROP.reviewFile(packet);
+  assert.equal(file.type, 'application/json');
+  assert.equal(file.name, 'pindrop-example.test-2026-07-08-r123.json');
+  const text = await new Promise((resolve, reject) => {
+    const reader = new w.FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
+  assert.equal(text, JSON.stringify(packet, null, 2));
+});
+
+test('shareReview uses native file sharing when supported', async () => {
+  const w = boot();
+  let shared;
+  Object.defineProperty(w.navigator, 'canShare', { configurable: true, value: ({ files }) => files.length === 1 });
+  Object.defineProperty(w.navigator, 'share', {
+    configurable: true,
+    value: async payload => { shared = payload; },
+  });
+  const packet = { reviewId: 'r1', exportedAt: '2026-07-08T12:00:00.000Z', summary: 'Review summary' };
+  const result = await w.PINDROP.shareReview(packet);
+  assert.equal(result.mode, 'native');
+  assert.equal(shared.text, 'Review summary');
+  assert.equal(shared.files.length, 1);
+  assert.equal(shared.files[0].type, 'application/json');
+});
+
+test('shareReview treats native cancellation as cancellation without fallback', async () => {
+  const w = boot();
+  let downloads = 0;
+  Object.defineProperty(w.URL, 'createObjectURL', {
+    configurable: true,
+    value: () => { downloads++; return 'blob:test'; },
+  });
+  Object.defineProperty(w.navigator, 'canShare', { configurable: true, value: () => true });
+  Object.defineProperty(w.navigator, 'share', {
+    configurable: true,
+    value: async () => { throw new w.DOMException('cancelled', 'AbortError'); },
+  });
+  const result = await w.PINDROP.shareReview(
+    { reviewId: 'r1', exportedAt: '2026-07-08T12:00:00.000Z', summary: 'Review summary' });
+  assert.equal(result.mode, 'cancelled');
+  assert.equal(downloads, 0);
+});
+
+test('shareReview returns native errors for explicit fallback actions', async () => {
+  const w = boot();
+  Object.defineProperty(w.navigator, 'canShare', { configurable: true, value: () => true });
+  Object.defineProperty(w.navigator, 'share', {
+    configurable: true,
+    value: async () => { throw new Error('share unavailable'); },
+  });
+  const result = await w.PINDROP.shareReview(
+    { reviewId: 'r1', exportedAt: '2026-07-08T12:00:00.000Z', summary: 'Review summary' });
+  assert.equal(result.mode, 'error');
+  assert.match(result.error.message, /share unavailable/);
+});
+
+test('shareReview falls back to download plus WhatsApp when file sharing is unsupported', async () => {
+  const w = boot();
+  let downloads = 0;
+  let opened = '';
+  Object.defineProperty(w.URL, 'createObjectURL', {
+    configurable: true,
+    value: () => { downloads++; return 'blob:test'; },
+  });
+  Object.defineProperty(w.URL, 'revokeObjectURL', { configurable: true, value: () => {} });
+  w.HTMLAnchorElement.prototype.click = () => {};
+  Object.defineProperty(w.navigator, 'canShare', { configurable: true, value: () => false });
+  w.open = url => { opened = url; return {}; };
+  const result = await w.PINDROP.shareReview(
+    { reviewId: 'r1', exportedAt: '2026-07-08T12:00:00.000Z', summary: 'Review summary' });
+  assert.equal(result.mode, 'fallback');
+  assert.equal(downloads, 1);
+  assert.match(opened, /^https:\/\/wa\.me\/\?text=/);
+});
+
+test('finish sheet summarizes the review and exposes all handoff actions', () => {
+  const pin = { v: 2, id: 'p1', xr: .2, y: 100, w: 390, note: 'Move this', ver: 5 };
+  const w = boot({
+    url: 'https://example.test/lab/demo/?fb=1#a',
+    seed: {
+      'pd:/lab/demo/#a': JSON.stringify([pin]),
+      'pd-q:/lab/demo/#a': JSON.stringify([{ id: 'q1', q: 'Keep this?', answer: '' }]),
+    },
+  });
+  w.document.querySelector('.pd-finish-btn').click();
+  const sheet = w.document.querySelector('.pd-finish');
+  assert.ok(sheet);
+  assert.match(sheet.textContent, /1 note/);
+  assert.match(sheet.textContent, /1 unanswered question/);
+  assert.match(sheet.textContent, /Full page URL included/);
+  assert.ok(sheet.querySelector('.pd-share-review'));
+  assert.ok(sheet.querySelector('.pd-download-review'));
+  assert.ok(sheet.querySelector('.pd-send-summary'));
+  assert.ok(sheet.querySelector('.pd-close-finish'));
+  assert.equal(JSON.parse(w.localStorage.getItem('pd:/lab/demo/#a')).length, 1);
+});

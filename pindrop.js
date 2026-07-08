@@ -579,6 +579,103 @@
       summary: buildCopyAll(buckets, verdicts, questions, ctxNow())
     };
   }
+  function reviewFilename(packet) {
+    var host = (location.hostname || 'page').replace(/[^a-z0-9.-]+/gi, '-');
+    return 'pindrop-' + host + '-' + packet.exportedAt.slice(0, 10) + '-' + packet.reviewId + '.json';
+  }
+  function reviewFile(packet) {
+    return new File([JSON.stringify(packet, null, 2)], reviewFilename(packet), { type: 'application/json' });
+  }
+  function downloadReview(packet) {
+    var file = reviewFile(packet);
+    var url = URL.createObjectURL(file);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+    return file;
+  }
+  function openSummary(text) {
+    var url = waUrl(text);
+    var win = window.open(url, '_blank');
+    if (!win) location.href = url;
+  }
+  function shareReview(packet) {
+    var file = reviewFile(packet), canShare = false;
+    try {
+      canShare = !!(navigator.share && navigator.canShare && navigator.canShare({ files: [file] }));
+    } catch (e) {}
+    if (canShare) {
+      return navigator.share({ text: packet.summary, files: [file] }).then(
+        function () { return { mode: 'native' }; },
+        function (error) {
+          if (error && error.name === 'AbortError') return { mode: 'cancelled' };
+          return { mode: 'error', error: error };
+        }
+      );
+    }
+    try {
+      downloadReview(packet);
+      openSummary(packet.summary);
+      return Promise.resolve({ mode: 'fallback' });
+    } catch (error) {
+      return Promise.resolve({ mode: 'error', error: error });
+    }
+  }
+  function packetStats(packet) {
+    var notes = 0, unanswered = 0, variants = {};
+    Object.keys(packet.pins).forEach(function (key) {
+      notes += packet.pins[key].length;
+      if (packet.pins[key].length) variants[key] = true;
+    });
+    Object.keys(packet.questions).forEach(function (key) {
+      for (var i = 0; i < packet.questions[key].length; i++) {
+        if (!packet.questions[key][i].answer) unanswered++;
+      }
+      if (packet.questions[key].length) variants[key] = true;
+    });
+    Object.keys(packet.verdicts).forEach(function (key) { variants[key] = true; });
+    return { notes: notes, unanswered: unanswered, variants: Object.keys(variants).length };
+  }
+  function openFinish() {
+    closePop();
+    var old = document.querySelector('.pd-finish');
+    if (old) old.remove();
+    var packet = buildReviewPacket(), stats = packetStats(packet);
+    var sheet = document.createElement('div');
+    sheet.className = 'pd-form pd-finish';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-label', 'Finish review');
+    sheet.innerHTML = '<h2>Finish review</h2>' +
+      '<p class="pd-note">' + stats.notes + (stats.notes === 1 ? ' note' : ' notes') +
+      ' across ' + stats.variants + (stats.variants === 1 ? ' variant' : ' variants') + '</p>' +
+      '<p class="pd-meta">' + stats.unanswered + (stats.unanswered === 1 ? ' unanswered question' : ' unanswered questions') +
+      ' · Full page URL included</p>' +
+      '<div class="r pd-finish-actions"><button type="button" class="pd-close-finish">Close</button>' +
+      '<button type="button" class="pd-send-summary">Send summary</button>' +
+      '<button type="button" class="pd-download-review">Download packet</button>' +
+      '<button type="button" class="p pd-share-review">Share review</button></div>' +
+      '<p class="pd-meta pd-finish-status" aria-live="polite"></p>';
+    document.body.appendChild(sheet);
+    var status = sheet.querySelector('.pd-finish-status');
+    sheet.querySelector('.pd-close-finish').addEventListener('click', function () { sheet.remove(); });
+    sheet.querySelector('.pd-send-summary').addEventListener('click', function () { openSummary(packet.summary); });
+    sheet.querySelector('.pd-download-review').addEventListener('click', function () {
+      try { downloadReview(packet); status.textContent = 'Packet downloaded'; }
+      catch (e) { status.textContent = 'Could not download packet'; }
+    });
+    sheet.querySelector('.pd-share-review').addEventListener('click', function () {
+      shareReview(packet).then(function (result) {
+        if (result.mode === 'native') status.textContent = 'Review shared';
+        else if (result.mode === 'cancelled') status.textContent = '';
+        else if (result.mode === 'fallback') status.textContent = 'Packet downloaded · attach it to your message';
+        else status.textContent = 'Could not share · use Download packet and Send summary';
+      });
+    });
+  }
 
   function armed() {
     return !!(queryArmed || ssGet('pd-on') || lsGet(keyFor()) ||
@@ -616,6 +713,9 @@
       'font:inherit;background:#fff;color:#221F1B}' +
       '.pd-form .r{display:flex;gap:6px;justify-content:flex-end;margin-top:7px}' +
       '.pd-form button{font:700 12px/1 ui-sans-serif,system-ui,sans-serif;border:0;border-radius:8px;padding:7px 11px;cursor:pointer;background:#F1EBE2;color:#221F1B}' +
+      '.pd-finish{position:fixed;left:auto;right:16px;top:auto;bottom:72px;width:min(330px,calc(100vw - 32px));box-sizing:border-box}' +
+      '.pd-finish h2{font:800 16px/1.2 ui-sans-serif,system-ui,sans-serif;margin:0 0 8px}' +
+      '.pd-finish .pd-finish-actions{flex-wrap:wrap}' +
       '.pd-meta{font:600 11px/1.3 ui-sans-serif,system-ui,sans-serif;color:#8a8378;margin-bottom:4px}' +
       '.pd-note{margin:0 0 8px}' +
       '.pd-form .del{background:#F1EBE2;color:#A82D46}' +
@@ -633,6 +733,7 @@
       '<button type="button" class="pd-add">+ Add note</button>' +
       '<button type="button" class="pd-copy">Copy</button>' +
       '<button type="button" class="pd-copyall">Copy all</button>' +
+      '<button type="button" class="pd-finish-btn">Finish review</button>' +
       '<button type="button" class="pd-send">Send</button>' +
       '<button type="button" class="pd-clear">Clear</button>' +
       '<button type="button" class="pd-x" aria-label="Hide feedback bar">✕</button>';
@@ -682,6 +783,8 @@
       writeOut(buildCopyAll(buckets, getVerdicts(), qsAll, ctxNow()), 'Copied all ' + total + '!');
     });
 
+    bar.querySelector('.pd-finish-btn').addEventListener('click', openFinish);
+
     bar.querySelector('.pd-send').addEventListener('click', function () {
       var buckets = allBuckets();
       var qsAll = allQuestions();
@@ -727,7 +830,7 @@
     });
   }
 
-  var api = { version: '2.0.0', mounted: false, mount: mount, buildReviewPacket: buildReviewPacket };
+  var api = { version: '2.1.0', mounted: false, mount: mount, buildReviewPacket: buildReviewPacket };
   window.pindrop = api;
   if (window.__PINDROP_TEST__) window.PINDROP = {
     keyFor: keyFor,
@@ -753,6 +856,10 @@
     capturePinContext: capturePinContext,
     captureEnvironment: captureEnvironment,
     buildReviewPacket: buildReviewPacket,
+    reviewFilename: reviewFilename,
+    reviewFile: reviewFile,
+    downloadReview: downloadReview,
+    shareReview: shareReview,
     cssPath: cssPath,
     anchorAt: anchorAt,
     pinXY: pinXY
