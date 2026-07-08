@@ -106,6 +106,45 @@ test('pageVer: meta wins, stamp fallback, else 0', () => {
   assert.equal(boot().PINDROP.pageVer(), 0);
 });
 
+test('stateCatalog exports every option and keeps duplicate labels scoped', () => {
+  const w = boot({ url: 'https://example.test/lab/demo/?fb=1#a', html: `
+    <section id="s-a">
+      <div data-pd-state="Example">
+        <button data-pd-value="rivka" aria-pressed="true">Rivka - 24</button>
+        <button data-pd-value="dovid" aria-pressed="false">Dovid - 27</button>
+        <button data-pd-value="miriam" aria-pressed="false">Miriam - 34</button>
+      </div>
+    </section>
+    <section id="s-b"><div data-pd-state="Example">
+      <button data-pd-value="other" aria-pressed="true">Other</button>
+    </div></section>` });
+  const groups = Array.from(w.PINDROP.stateCatalog());
+  assert.equal(groups.length, 2);
+  assert.deepEqual(Array.from(groups[0].options, o => o.id), ['rivka', 'dovid', 'miriam']);
+  assert.deepEqual(Array.from(groups[0].options, o => o.selectedAtExport), [true, false, false]);
+  assert.equal(groups[0].scope, '#s-a');
+  assert.equal(groups[1].scope, '#s-b');
+  assert.notEqual(groups[0].selector, groups[1].selector);
+});
+
+test('capturePinContext records full URL, viewport, and only visible selected states', () => {
+  const w = boot({ url: 'https://example.test/lab/demo/?fb=1#a', html: `
+    <div id="shown" data-pd-state="Example">
+      <button data-pd-value="rivka" aria-pressed="true">Rivka - 24</button>
+      <button data-pd-value="dovid" aria-pressed="false">Dovid - 27</button>
+    </div>
+    <div id="hidden" data-pd-state="Photo">
+      <button aria-pressed="true">With</button>
+    </div>` });
+  w.document.querySelector('#shown').getClientRects = () => [{ width: 10, height: 10 }];
+  const context = w.PINDROP.capturePinContext();
+  assert.equal(context.url, 'https://example.test/lab/demo/?fb=1#a');
+  assert.equal(context.viewport.width, w.innerWidth);
+  assert.equal(context.viewport.height, w.innerHeight);
+  assert.deepEqual(Array.from(context.states, s => s.label), ['Example']);
+  assert.equal(context.states[0].selected[0].id, 'rivka');
+});
+
 test('cssPath: id short-circuit + nth-of-type only when needed; round-trips', () => {
   const w = boot({ html: '<div id="root"><ul><li>a</li><li>b</li><li>c</li></ul><p>solo</p></div>' });
   const li2 = w.document.querySelectorAll('li')[1];

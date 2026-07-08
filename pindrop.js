@@ -145,6 +145,75 @@
     return parts.join(' · ');
   }
 
+  function cleanText(el) {
+    return ((el.getAttribute && el.getAttribute('aria-label')) || el.textContent || '')
+      .trim().replace(/\s+/g, ' ');
+  }
+  function isVisible(el) { return !!(el && el.getClientRects && el.getClientRects().length); }
+  function optionSelected(el) {
+    return el.getAttribute('aria-pressed') === 'true' ||
+      el.getAttribute('aria-selected') === 'true' ||
+      el.getAttribute('data-active') === 'true' ||
+      !!el.checked || !!el.selected;
+  }
+  function optionId(el, label) {
+    return el.getAttribute('data-pd-value') || el.value || el.id ||
+      label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+  function stateOptions(group) {
+    var found = group.querySelectorAll(
+      '[data-pd-value],button,[role="option"],[role="tab"],input,select option,[aria-pressed],[aria-selected],[data-active]');
+    var out = [], seen = {};
+    for (var i = 0; i < found.length; i++) {
+      var label = cleanText(found[i]);
+      if (!label) continue;
+      var id = optionId(found[i], label);
+      if (!id || seen[id]) continue;
+      seen[id] = true;
+      out.push({ id: id, label: label, selectedAtExport: optionSelected(found[i]) });
+    }
+    return out;
+  }
+  function stateScope(group) {
+    var scoped = group.closest && group.closest('[id]');
+    return scoped ? '#' + scoped.id : location.hash || '(page)';
+  }
+  function stateCatalog() {
+    var groups = document.querySelectorAll('[data-pd-state]'), out = [];
+    for (var i = 0; i < groups.length; i++) {
+      out.push({
+        id: 'state-' + (i + 1),
+        label: groups[i].getAttribute('data-pd-state') || '',
+        selector: cssPath(groups[i]),
+        scope: stateScope(groups[i]),
+        visibleAtExport: isVisible(groups[i]),
+        options: stateOptions(groups[i])
+      });
+    }
+    return out;
+  }
+  function capturePinContext() {
+    var catalog = stateCatalog(), states = [];
+    for (var i = 0; i < catalog.length; i++) {
+      if (!catalog[i].visibleAtExport) continue;
+      var selected = [];
+      for (var j = 0; j < catalog[i].options.length; j++) {
+        var option = catalog[i].options[j];
+        if (option.selectedAtExport) selected.push({ id: option.id, label: option.label });
+      }
+      if (selected.length) states.push({
+        stateId: catalog[i].id,
+        label: catalog[i].label,
+        selected: selected
+      });
+    }
+    return {
+      url: location.href,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      states: states
+    };
+  }
+
   function cssPath(el) {
     var parts = [];
     while (el && el.nodeType === 1 && el !== document.body && parts.length < 6) {
@@ -263,7 +332,7 @@
           v: 2, id: pinId(), t: Date.now(),
           xr: x / document.documentElement.scrollWidth, y: y, near: nearText(x, y),
           note: note, w: window.innerWidth, state: captureState(), ver: pageVer(),
-          who: whoName() || undefined, anchor: anchorAt(x, y)
+          who: whoName() || undefined, anchor: anchorAt(x, y), context: capturePinContext()
         }));
         save(); render();
       }
@@ -590,6 +659,8 @@
     loadQuestions: loadQuestions,
     allQuestions: allQuestions,
     saveAnswer: saveAnswer,
+    stateCatalog: stateCatalog,
+    capturePinContext: capturePinContext,
     cssPath: cssPath,
     anchorAt: anchorAt,
     pinXY: pinXY
