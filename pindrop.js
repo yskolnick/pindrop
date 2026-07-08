@@ -660,6 +660,7 @@
       '<button type="button" class="p pd-share-review">Share review</button></div>' +
       '<p class="pd-meta pd-finish-status" aria-live="polite"></p>';
     document.body.appendChild(sheet);
+    sheet.style.bottom = (24 + (bar && bar.getBoundingClientRect ? bar.getBoundingClientRect().height : 0)) + 'px';
     var status = sheet.querySelector('.pd-finish-status');
     sheet.querySelector('.pd-close-finish').addEventListener('click', function () { sheet.remove(); });
     sheet.querySelector('.pd-send-summary').addEventListener('click', function () { openSummary(packet.summary); });

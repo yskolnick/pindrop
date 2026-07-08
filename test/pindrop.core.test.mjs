@@ -358,3 +358,11 @@ test('finish sheet summarizes the review and exposes all handoff actions', () =>
   assert.ok(sheet.querySelector('.pd-close-finish'));
   assert.equal(JSON.parse(w.localStorage.getItem('pd:/lab/demo/#a')).length, 1);
 });
+
+test('finish sheet clears a wrapped toolbar using its measured height', () => {
+  const w = boot();
+  const bar = w.document.querySelector('.pd-bar');
+  bar.getBoundingClientRect = () => ({ height: 116 });
+  w.document.querySelector('.pd-finish-btn').click();
+  assert.equal(w.document.querySelector('.pd-finish').style.bottom, '140px');
+});
