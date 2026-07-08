@@ -490,6 +490,96 @@
     return out;
   }
 
+  function mediaMatches(query) {
+    try { return !!(window.matchMedia && window.matchMedia(query).matches); } catch (e) { return false; }
+  }
+  function browserInfo() {
+    var ua = navigator.userAgent || '', name = '', version = '', match;
+    if ((match = ua.match(/Edg\/([\d.]+)/))) { name = 'Edge'; version = match[1]; }
+    else if ((match = ua.match(/(?:Chrome|CriOS)\/([\d.]+)/))) { name = 'Chrome'; version = match[1]; }
+    else if ((match = ua.match(/(?:Firefox|FxiOS)\/([\d.]+)/))) { name = 'Firefox'; version = match[1]; }
+    else if (/Safari\//.test(ua) && (match = ua.match(/Version\/([\d.]+)/))) { name = 'Safari'; version = match[1]; }
+    var data = navigator.userAgentData, brands = [];
+    if (data && data.brands) {
+      for (var i = 0; i < data.brands.length; i++) {
+        brands.push({ brand: data.brands[i].brand, version: data.brands[i].version });
+      }
+    }
+    return {
+      name: name,
+      version: version,
+      userAgent: ua,
+      brands: brands,
+      mobile: data && typeof data.mobile === 'boolean' ? data.mobile : /Mobi|Android|iPhone|iPad/i.test(ua)
+    };
+  }
+  function captureEnvironment() {
+    var root = document.documentElement || {}, screenInfo = window.screen || {};
+    var orientation = screenInfo.orientation || {};
+    var uaData = navigator.userAgentData || {};
+    var languages = navigator.languages ? Array.prototype.slice.call(navigator.languages) : [];
+    var points = navigator.maxTouchPoints || 0;
+    return {
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        scrollWidth: root.scrollWidth || 0,
+        scrollHeight: root.scrollHeight || 0
+      },
+      screen: {
+        width: screenInfo.width == null ? null : screenInfo.width,
+        height: screenInfo.height == null ? null : screenInfo.height,
+        availWidth: screenInfo.availWidth == null ? null : screenInfo.availWidth,
+        availHeight: screenInfo.availHeight == null ? null : screenInfo.availHeight,
+        orientationType: orientation.type || null,
+        orientationAngle: orientation.angle == null ? null : orientation.angle
+      },
+      display: {
+        devicePixelRatio: window.devicePixelRatio || 1,
+        colorScheme: mediaMatches('(prefers-color-scheme: dark)') ? 'dark' : 'light',
+        reducedMotion: mediaMatches('(prefers-reduced-motion: reduce)')
+      },
+      browser: browserInfo(),
+      system: {
+        platform: navigator.platform || '',
+        uaPlatform: uaData.platform || '',
+        language: navigator.language || '',
+        languages: languages,
+        touch: points > 0 || 'ontouchstart' in window,
+        maxTouchPoints: points
+      }
+    };
+  }
+  function reviewId() {
+    return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+  function buildReviewPacket() {
+    var buckets = allBuckets(), questions = allQuestions(), verdicts = getVerdicts();
+    var pinsOut = {};
+    for (var i = 0; i < buckets.length; i++) pinsOut[buckets[i].variant] = buckets[i].pins;
+    return {
+      format: 'pindrop-review',
+      formatVersion: 1,
+      reviewId: reviewId(),
+      exportedAt: new Date().toISOString(),
+      reviewer: whoName(),
+      page: {
+        url: location.href,
+        title: document.title || '',
+        version: pageVer(),
+        pathname: location.pathname,
+        query: location.search,
+        hash: location.hash
+      },
+      environment: captureEnvironment(),
+      stateCatalog: stateCatalog(),
+      pins: pinsOut,
+      verdicts: verdicts,
+      questions: questions,
+      summary: buildCopyAll(buckets, verdicts, questions, ctxNow())
+    };
+  }
+
   function armed() {
     return !!(queryArmed || ssGet('pd-on') || lsGet(keyFor()) ||
       lsGet('pd-q:' + location.pathname + location.hash));
@@ -637,7 +727,7 @@
     });
   }
 
-  var api = { version: '2.0.0', mounted: false, mount: mount };
+  var api = { version: '2.0.0', mounted: false, mount: mount, buildReviewPacket: buildReviewPacket };
   window.pindrop = api;
   if (window.__PINDROP_TEST__) window.PINDROP = {
     keyFor: keyFor,
@@ -661,6 +751,8 @@
     saveAnswer: saveAnswer,
     stateCatalog: stateCatalog,
     capturePinContext: capturePinContext,
+    captureEnvironment: captureEnvironment,
+    buildReviewPacket: buildReviewPacket,
     cssPath: cssPath,
     anchorAt: anchorAt,
     pinXY: pinXY

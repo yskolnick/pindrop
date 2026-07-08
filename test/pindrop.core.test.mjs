@@ -145,6 +145,51 @@ test('capturePinContext records full URL, viewport, and only visible selected st
   assert.equal(context.states[0].selected[0].id, 'rivka');
 });
 
+test('captureEnvironment reports viewport, screen, browser, display, system, and touch context', () => {
+  const w = boot();
+  Object.defineProperty(w, 'devicePixelRatio', { configurable: true, value: 2 });
+  Object.defineProperty(w.navigator, 'maxTouchPoints', { configurable: true, value: 5 });
+  const env = w.PINDROP.captureEnvironment();
+  assert.equal(env.viewport.width, w.innerWidth);
+  assert.equal(env.viewport.height, w.innerHeight);
+  assert.equal(env.display.devicePixelRatio, 2);
+  assert.equal(env.system.maxTouchPoints, 5);
+  assert.equal(env.system.touch, true);
+  assert.equal(env.browser.userAgent, w.navigator.userAgent);
+  assert.ok('width' in env.screen);
+  assert.ok('name' in env.browser);
+  assert.ok('version' in env.browser);
+});
+
+test('buildReviewPacket preserves full URL and feedback without mutating storage', () => {
+  const pinsJson = JSON.stringify([{ v: 2, id: 'p1', xr: .2, y: 100, w: 390, note: 'Move this', ver: 5 }]);
+  const w = boot({
+    url: 'https://example.test/lab/demo/?fb=1#a',
+    html: '<title>Profile redesign</title><meta name="pd-version" content="5">',
+    seed: {
+      'pd:/lab/demo/#a': pinsJson,
+      'pd-v:/lab/demo/': JSON.stringify({ '#a': 'winner' }),
+      'pd-q:/lab/demo/#a': JSON.stringify([{ id: 'q1', q: 'Keep this?', answer: '' }]),
+      'pd-who': 'Yosef',
+    },
+  });
+  const packet = w.PINDROP.buildReviewPacket();
+  assert.equal(packet.format, 'pindrop-review');
+  assert.equal(packet.formatVersion, 1);
+  assert.equal(packet.page.url, 'https://example.test/lab/demo/?fb=1#a');
+  assert.equal(packet.page.title, 'Profile redesign');
+  assert.equal(packet.page.version, 5);
+  assert.equal(packet.page.query, '?fb=1');
+  assert.equal(packet.page.hash, '#a');
+  assert.match(packet.reviewId, /^r[a-z0-9]+$/);
+  assert.equal(packet.reviewer, 'Yosef');
+  assert.equal(packet.pins['#a'][0].note, 'Move this');
+  assert.equal(packet.verdicts['#a'], 'winner');
+  assert.equal(packet.questions['#a'][0].q, 'Keep this?');
+  assert.match(packet.summary, /Move this/);
+  assert.equal(w.localStorage.getItem('pd:/lab/demo/#a'), pinsJson);
+});
+
 test('cssPath: id short-circuit + nth-of-type only when needed; round-trips', () => {
   const w = boot({ html: '<div id="root"><ul><li>a</li><li>b</li><li>c</li></ul><p>solo</p></div>' });
   const li2 = w.document.querySelectorAll('li')[1];
