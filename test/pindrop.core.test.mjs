@@ -127,6 +127,20 @@ test('stateCatalog exports every option and keeps duplicate labels scoped', () =
   assert.notEqual(groups[0].selector, groups[1].selector);
 });
 
+test('stateCatalog uses associated labels and checked state for radio options', () => {
+  const w = boot({ html: `
+    <fieldset id="layout" data-pd-state="Layout">
+      <input id="compact" type="radio" name="layout" value="compact" checked>
+      <label for="compact">Compact</label>
+      <input id="roomy" type="radio" name="layout" value="roomy">
+      <label for="roomy">Roomy</label>
+    </fieldset>` });
+  const options = Array.from(w.PINDROP.stateCatalog()[0].options);
+  assert.deepEqual(options.map(option => option.label), ['Compact', 'Roomy']);
+  assert.deepEqual(options.map(option => option.id), ['compact', 'roomy']);
+  assert.deepEqual(options.map(option => option.selectedAtExport), [true, false]);
+});
+
 test('capturePinContext records full URL, viewport, and only visible selected states', () => {
   const w = boot({ url: 'https://example.test/lab/demo/?fb=1#a', html: `
     <div id="shown" data-pd-state="Example">

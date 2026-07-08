@@ -146,7 +146,8 @@
   }
 
   function cleanText(el) {
-    return ((el.getAttribute && el.getAttribute('aria-label')) || el.textContent || '')
+    var label = el.labels && el.labels.length ? el.labels[0].textContent : '';
+    return ((el.getAttribute && el.getAttribute('aria-label')) || el.textContent || label || '')
       .trim().replace(/\s+/g, ' ');
   }
   function isVisible(el) { return !!(el && el.getClientRects && el.getClientRects().length); }
