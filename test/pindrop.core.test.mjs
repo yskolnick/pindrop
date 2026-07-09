@@ -106,6 +106,104 @@ test('pageVer: meta wins, stamp fallback, else 0', () => {
   assert.equal(boot().PINDROP.pageVer(), 0);
 });
 
+test('stateCatalog exports every option and keeps duplicate labels scoped', () => {
+  const w = boot({ url: 'https://example.test/lab/demo/?fb=1#a', html: `
+    <section id="s-a">
+      <div data-pd-state="Example">
+        <button data-pd-value="rivka" aria-pressed="true">Rivka - 24</button>
+        <button data-pd-value="dovid" aria-pressed="false">Dovid - 27</button>
+        <button data-pd-value="miriam" aria-pressed="false">Miriam - 34</button>
+      </div>
+    </section>
+    <section id="s-b"><div data-pd-state="Example">
+      <button data-pd-value="other" aria-pressed="true">Other</button>
+    </div></section>` });
+  const groups = Array.from(w.PINDROP.stateCatalog());
+  assert.equal(groups.length, 2);
+  assert.deepEqual(Array.from(groups[0].options, o => o.id), ['rivka', 'dovid', 'miriam']);
+  assert.deepEqual(Array.from(groups[0].options, o => o.selectedAtExport), [true, false, false]);
+  assert.equal(groups[0].scope, '#s-a');
+  assert.equal(groups[1].scope, '#s-b');
+  assert.notEqual(groups[0].selector, groups[1].selector);
+});
+
+test('stateCatalog uses associated labels and checked state for radio options', () => {
+  const w = boot({ html: `
+    <fieldset id="layout" data-pd-state="Layout">
+      <input id="compact" type="radio" name="layout" value="compact" checked>
+      <label for="compact">Compact</label>
+      <input id="roomy" type="radio" name="layout" value="roomy">
+      <label for="roomy">Roomy</label>
+    </fieldset>` });
+  const options = Array.from(w.PINDROP.stateCatalog()[0].options);
+  assert.deepEqual(options.map(option => option.label), ['Compact', 'Roomy']);
+  assert.deepEqual(options.map(option => option.id), ['compact', 'roomy']);
+  assert.deepEqual(options.map(option => option.selectedAtExport), [true, false]);
+});
+
+test('capturePinContext records full URL, viewport, and only visible selected states', () => {
+  const w = boot({ url: 'https://example.test/lab/demo/?fb=1#a', html: `
+    <div id="shown" data-pd-state="Example">
+      <button data-pd-value="rivka" aria-pressed="true">Rivka - 24</button>
+      <button data-pd-value="dovid" aria-pressed="false">Dovid - 27</button>
+    </div>
+    <div id="hidden" data-pd-state="Photo">
+      <button aria-pressed="true">With</button>
+    </div>` });
+  w.document.querySelector('#shown').getClientRects = () => [{ width: 10, height: 10 }];
+  const context = w.PINDROP.capturePinContext();
+  assert.equal(context.url, 'https://example.test/lab/demo/?fb=1#a');
+  assert.equal(context.viewport.width, w.innerWidth);
+  assert.equal(context.viewport.height, w.innerHeight);
+  assert.deepEqual(Array.from(context.states, s => s.label), ['Example']);
+  assert.equal(context.states[0].selected[0].id, 'rivka');
+});
+
+test('captureEnvironment reports viewport, screen, browser, display, system, and touch context', () => {
+  const w = boot();
+  Object.defineProperty(w, 'devicePixelRatio', { configurable: true, value: 2 });
+  Object.defineProperty(w.navigator, 'maxTouchPoints', { configurable: true, value: 5 });
+  const env = w.PINDROP.captureEnvironment();
+  assert.equal(env.viewport.width, w.innerWidth);
+  assert.equal(env.viewport.height, w.innerHeight);
+  assert.equal(env.display.devicePixelRatio, 2);
+  assert.equal(env.system.maxTouchPoints, 5);
+  assert.equal(env.system.touch, true);
+  assert.equal(env.browser.userAgent, w.navigator.userAgent);
+  assert.ok('width' in env.screen);
+  assert.ok('name' in env.browser);
+  assert.ok('version' in env.browser);
+});
+
+test('buildReviewPacket preserves full URL and feedback without mutating storage', () => {
+  const pinsJson = JSON.stringify([{ v: 2, id: 'p1', xr: .2, y: 100, w: 390, note: 'Move this', ver: 5 }]);
+  const w = boot({
+    url: 'https://example.test/lab/demo/?fb=1#a',
+    html: '<title>Profile redesign</title><meta name="pd-version" content="5">',
+    seed: {
+      'pd:/lab/demo/#a': pinsJson,
+      'pd-v:/lab/demo/': JSON.stringify({ '#a': 'winner' }),
+      'pd-q:/lab/demo/#a': JSON.stringify([{ id: 'q1', q: 'Keep this?', answer: '' }]),
+      'pd-who': 'Yosef',
+    },
+  });
+  const packet = w.PINDROP.buildReviewPacket();
+  assert.equal(packet.format, 'pindrop-review');
+  assert.equal(packet.formatVersion, 1);
+  assert.equal(packet.page.url, 'https://example.test/lab/demo/?fb=1#a');
+  assert.equal(packet.page.title, 'Profile redesign');
+  assert.equal(packet.page.version, 5);
+  assert.equal(packet.page.query, '?fb=1');
+  assert.equal(packet.page.hash, '#a');
+  assert.match(packet.reviewId, /^r[a-z0-9]+$/);
+  assert.equal(packet.reviewer, 'Yosef');
+  assert.equal(packet.pins['#a'][0].note, 'Move this');
+  assert.equal(packet.verdicts['#a'], 'winner');
+  assert.equal(packet.questions['#a'][0].q, 'Keep this?');
+  assert.match(packet.summary, /Move this/);
+  assert.equal(w.localStorage.getItem('pd:/lab/demo/#a'), pinsJson);
+});
+
 test('cssPath: id short-circuit + nth-of-type only when needed; round-trips', () => {
   const w = boot({ html: '<div id="root"><ul><li>a</li><li>b</li><li>c</li></ul><p>solo</p></div>' });
   const li2 = w.document.querySelectorAll('li')[1];
@@ -169,4 +267,116 @@ test('allQuestions: groups by variant for the current pathname only', () => {
     'pd-q:/lab/other/#a': JSON.stringify([{ id: 'q3', q: 'other?' }]),
   } });
   assert.deepEqual(Object.keys(w.PINDROP.allQuestions()).sort(), ['#a', '#b']);
+});
+
+test('reviewFilename is safe and reviewFile contains exact packet JSON', async () => {
+  const w = boot();
+  const packet = { reviewId: 'r123', exportedAt: '2026-07-08T12:00:00.000Z' };
+  assert.equal(w.PINDROP.reviewFilename(packet), 'pindrop-example.test-2026-07-08-r123.json');
+  const file = w.PINDROP.reviewFile(packet);
+  assert.equal(file.type, 'application/json');
+  assert.equal(file.name, 'pindrop-example.test-2026-07-08-r123.json');
+  const text = await new Promise((resolve, reject) => {
+    const reader = new w.FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
+  assert.equal(text, JSON.stringify(packet, null, 2));
+});
+
+test('shareReview uses native file sharing when supported', async () => {
+  const w = boot();
+  let shared;
+  Object.defineProperty(w.navigator, 'canShare', { configurable: true, value: ({ files }) => files.length === 1 });
+  Object.defineProperty(w.navigator, 'share', {
+    configurable: true,
+    value: async payload => { shared = payload; },
+  });
+  const packet = { reviewId: 'r1', exportedAt: '2026-07-08T12:00:00.000Z', summary: 'Review summary' };
+  const result = await w.PINDROP.shareReview(packet);
+  assert.equal(result.mode, 'native');
+  assert.equal(shared.text, 'Review summary');
+  assert.equal(shared.files.length, 1);
+  assert.equal(shared.files[0].type, 'application/json');
+});
+
+test('shareReview treats native cancellation as cancellation without fallback', async () => {
+  const w = boot();
+  let downloads = 0;
+  Object.defineProperty(w.URL, 'createObjectURL', {
+    configurable: true,
+    value: () => { downloads++; return 'blob:test'; },
+  });
+  Object.defineProperty(w.navigator, 'canShare', { configurable: true, value: () => true });
+  Object.defineProperty(w.navigator, 'share', {
+    configurable: true,
+    value: async () => { throw new w.DOMException('cancelled', 'AbortError'); },
+  });
+  const result = await w.PINDROP.shareReview(
+    { reviewId: 'r1', exportedAt: '2026-07-08T12:00:00.000Z', summary: 'Review summary' });
+  assert.equal(result.mode, 'cancelled');
+  assert.equal(downloads, 0);
+});
+
+test('shareReview returns native errors for explicit fallback actions', async () => {
+  const w = boot();
+  Object.defineProperty(w.navigator, 'canShare', { configurable: true, value: () => true });
+  Object.defineProperty(w.navigator, 'share', {
+    configurable: true,
+    value: async () => { throw new Error('share unavailable'); },
+  });
+  const result = await w.PINDROP.shareReview(
+    { reviewId: 'r1', exportedAt: '2026-07-08T12:00:00.000Z', summary: 'Review summary' });
+  assert.equal(result.mode, 'error');
+  assert.match(result.error.message, /share unavailable/);
+});
+
+test('shareReview falls back to download plus WhatsApp when file sharing is unsupported', async () => {
+  const w = boot();
+  let downloads = 0;
+  let opened = '';
+  Object.defineProperty(w.URL, 'createObjectURL', {
+    configurable: true,
+    value: () => { downloads++; return 'blob:test'; },
+  });
+  Object.defineProperty(w.URL, 'revokeObjectURL', { configurable: true, value: () => {} });
+  w.HTMLAnchorElement.prototype.click = () => {};
+  Object.defineProperty(w.navigator, 'canShare', { configurable: true, value: () => false });
+  w.open = url => { opened = url; return {}; };
+  const result = await w.PINDROP.shareReview(
+    { reviewId: 'r1', exportedAt: '2026-07-08T12:00:00.000Z', summary: 'Review summary' });
+  assert.equal(result.mode, 'fallback');
+  assert.equal(downloads, 1);
+  assert.match(opened, /^https:\/\/wa\.me\/\?text=/);
+});
+
+test('finish sheet summarizes the review and exposes all handoff actions', () => {
+  const pin = { v: 2, id: 'p1', xr: .2, y: 100, w: 390, note: 'Move this', ver: 5 };
+  const w = boot({
+    url: 'https://example.test/lab/demo/?fb=1#a',
+    seed: {
+      'pd:/lab/demo/#a': JSON.stringify([pin]),
+      'pd-q:/lab/demo/#a': JSON.stringify([{ id: 'q1', q: 'Keep this?', answer: '' }]),
+    },
+  });
+  w.document.querySelector('.pd-finish-btn').click();
+  const sheet = w.document.querySelector('.pd-finish');
+  assert.ok(sheet);
+  assert.match(sheet.textContent, /1 note/);
+  assert.match(sheet.textContent, /1 unanswered question/);
+  assert.match(sheet.textContent, /Full page URL included/);
+  assert.ok(sheet.querySelector('.pd-share-review'));
+  assert.ok(sheet.querySelector('.pd-download-review'));
+  assert.ok(sheet.querySelector('.pd-send-summary'));
+  assert.ok(sheet.querySelector('.pd-close-finish'));
+  assert.equal(JSON.parse(w.localStorage.getItem('pd:/lab/demo/#a')).length, 1);
+});
+
+test('finish sheet clears a wrapped toolbar using its measured height', () => {
+  const w = boot();
+  const bar = w.document.querySelector('.pd-bar');
+  bar.getBoundingClientRect = () => ({ height: 116 });
+  w.document.querySelector('.pd-finish-btn').click();
+  assert.equal(w.document.querySelector('.pd-finish').style.bottom, '140px');
 });

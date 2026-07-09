@@ -1,4 +1,4 @@
-# pindrop - specification (v2)
+# pindrop - specification (v2.1)
 
 pindrop is one dependency-free file. It never auto-deletes user data: deletion authority belongs to
 the reviewer through dismiss/clear or to an agent during pickup/write-back. Every reader tolerates
@@ -161,7 +161,12 @@ Load guard: first line of the IIFE exits when `window.pindrop` already exists.
 Public API:
 
 ```js
-window.pindrop = { version: '2.0.0', mounted: false, mount: mount };
+window.pindrop = {
+  version: '2.1.0',
+  mounted: false,
+  mount: mount,
+  buildReviewPacket: buildReviewPacket
+};
 ```
 
 `mount()` forces the overlay, sets session `pd-on`, and builds the UI once. All DOM construction is
@@ -200,3 +205,83 @@ but UI may render unstyled. Extension and userscript builds are future options.
 Pages declare `pd-version` or a `.stamp`. Script tags carry `?v=N`, bumped on release. The pin schema
 is versioned by the `v` field; changes must stay additive so an older cached `pindrop.js` renders
 newer pins harmlessly.
+
+## 10 - Review Packet v1
+
+**Finish review** builds one immutable snapshot and produces a readable summary plus a structured
+`.pindrop.json` file. Exporting does not clear, resolve, or otherwise mutate feedback.
+
+Required top-level fields:
+
+```json
+{
+  "format": "pindrop-review",
+  "formatVersion": 1,
+  "reviewId": "r...",
+  "exportedAt": "2026-07-08T19:30:00.000Z",
+  "reviewer": "Yosef",
+  "page": {},
+  "environment": {},
+  "stateCatalog": [],
+  "pins": {},
+  "verdicts": {},
+  "questions": {},
+  "summary": "Design feedback ..."
+}
+```
+
+Readers must reject an unknown `format`, reject unsupported major `formatVersion` values, and ignore
+unknown fields.
+
+`page.url` is exact `location.href`, including query parameters and hash. `page` also contains
+title, page version, pathname, query, and hash.
+
+`environment` contains:
+
+- viewport width/height and document scroll width/height
+- physical screen and available-screen dimensions
+- screen orientation and device pixel ratio
+- color scheme and reduced-motion preference
+- best-effort browser name/version plus raw user agent and User-Agent Client Hints when available
+- platform, language(s), touch capability, and maximum touch points
+
+Pindrop does not collect cookies, arbitrary localStorage, IP address, geolocation, form values,
+console logs, or network logs.
+
+Every `[data-pd-state="Label"]` group appears in `stateCatalog`, including hidden declared groups.
+The catalog preserves separate scopes for duplicate labels and lists every discoverable option.
+Option identity uses `data-pd-value`, then native `value`, element `id`, or normalized visible text.
+Selection is detected through `aria-pressed`, `aria-selected`, `data-active`, `checked`, or
+`selected`.
+
+New pins retain the legacy `state` string and add:
+
+```json
+{
+  "context": {
+    "url": "https://example.com/prototype/?pd=1#a",
+    "viewport": { "width": 390, "height": 844 },
+    "states": [
+      {
+        "stateId": "state-1",
+        "label": "Example",
+        "selected": [{ "id": "rivka", "label": "Rivka - 24" }]
+      }
+    ]
+  }
+}
+```
+
+Only visible declared groups are included in a pin snapshot. The packet-level catalog still lists
+all declared groups and options. Different pins may therefore preserve different selections from
+one review.
+
+When `navigator.share` and `navigator.canShare({files})` support file sharing, Pindrop shares the
+summary and JSON file together. Otherwise it downloads the JSON file and opens the WhatsApp summary.
+Cancelling the native share sheet does not trigger fallback. Other native-share failures leave
+explicit Download packet and Send summary actions available.
+
+Agents consuming a packet must validate `format` and `formatVersion`, echo all packet feedback into
+the conversation before changing anything, use each pin's URL/viewport/anchor/state snapshot, and
+use `stateCatalog` to understand every available page-state option. Same-browser localStorage pickup
+remains preferred when available because it supports resolved-pin write-back.

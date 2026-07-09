@@ -203,17 +203,17 @@
   <main>
     <section>
       <h1>pindrop</h1>
-      <p class="lede">Feedback pins for prototypes: local, lightweight, and easy for an agent or a person to pick up.</p>
+      <p class="lede">Feedback pins for prototypes: local, lightweight, and packaged with the exact context an agent needs.</p>
       <div class="actions">
         <a class="button" href="./?pd=1">Try with pins on</a>
         <a class="ghost" href="./SPEC.md">Read the spec</a>
       </div>
       <div class="tools" aria-label="Bookmarklet">
         <div class="bookmarklet-row">
-          <a class="bm" href="javascript:(function(){if(window.pindrop){pindrop.mount();return}var s=document.createElement('script');s.src='https://yskolnick.github.io/pindrop/pindrop.js?v=1';s.onload=function(){window.pindrop&&window.pindrop.mount()};document.documentElement.appendChild(s)})()">pindrop</a>
+          <a class="bm" href="javascript:(function(){if(window.pindrop){pindrop.mount();return}var s=document.createElement('script');s.src='https://yskolnick.github.io/pindrop/pindrop.js?v=2';s.onload=function(){window.pindrop&&window.pindrop.mount()};document.documentElement.appendChild(s)})()">pindrop</a>
           <span>Drag to bookmarks, then click on any page.</span>
         </div>
-        <input readonly onclick="this.select()" value="javascript:(function(){if(window.pindrop){pindrop.mount();return}var s=document.createElement('script');s.src='https://yskolnick.github.io/pindrop/pindrop.js?v=1';s.onload=function(){window.pindrop&&window.pindrop.mount()};document.documentElement.appendChild(s)})()">
+        <input readonly onclick="this.select()" value="javascript:(function(){if(window.pindrop){pindrop.mount();return}var s=document.createElement('script');s.src='https://yskolnick.github.io/pindrop/pindrop.js?v=2';s.onload=function(){window.pindrop&&window.pindrop.mount()};document.documentElement.appendChild(s)})()">
       </div>
     </section>
 
@@ -242,6 +242,7 @@
         <div class="pin-row"><span class="dot">1</span><span>Numbered notes sit exactly where feedback belongs.</span></div>
         <div class="pin-row"><span class="dot blue">Q</span><span>Questions can be planted for reviewers to answer in place.</span></div>
         <div class="pin-row"><span class="dot green">✓</span><span>Resolved notes stay visible until dismissed.</span></div>
+        <div class="pin-row"><span class="dot">↓</span><span>Finish review packages notes, screen, browser, URL, and page states into one portable file.</span></div>
       </div>
     </section>
   </main>
@@ -255,6 +256,6 @@
       });
     });
   </script>
-  <script src="./pindrop.js?v=1" defer></script>
+  <script src="./pindrop.js?v=2" defer></script>
 </body>
 </html>

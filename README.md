@@ -13,13 +13,13 @@ surprises.
 Sites hosted under `yskolnick.github.io` may hotlink the canonical copy once this repo is published:
 
 ```html
-<script src="https://yskolnick.github.io/pindrop/pindrop.js?v=1" defer></script>
+<script src="https://yskolnick.github.io/pindrop/pindrop.js?v=2" defer></script>
 ```
 
 Third-party hotlinks should pin an exact tag and use Subresource Integrity:
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/yskolnick/pindrop@v2.0.0/pindrop.js"
+<script src="https://cdn.jsdelivr.net/gh/yskolnick/pindrop@v2.1.0/pindrop.js"
         integrity="sha384-<hash>" crossorigin="anonymous" defer></script>
 ```
 
@@ -27,8 +27,29 @@ The release notes will publish the `sha384` hash. Do not use an unpinned CDN pat
 
 ## Use It
 
-Open the page with `?pd=1`, choose **Add note**, click the page, write the note, then use **Copy**,
-**Copy all**, or **Send**. Pins persist in that browser for the reviewed page and variant.
+Open the page with `?pd=1`, choose **Add note**, click the page, and write the note. Pins persist in
+that browser for the reviewed page and variant.
+
+Choose **Finish review** to create both a readable summary and a structured `.pindrop.json` Review
+Packet. Where the browser supports sharing files, the native share sheet receives both. Otherwise
+Pindrop downloads the packet and opens the WhatsApp summary so the file can be attached manually.
+Exporting never clears the review.
+
+## Review Packets
+
+A Review Packet is a backend-free handoff for an AI agent or human implementer. It includes:
+
+- The complete page URL, including query parameters and hash.
+- Page title and version.
+- Browser identity and raw user-agent data.
+- Operating-system/platform, language, touch capability, and device pixel ratio.
+- Viewport, physical screen, orientation, and display preferences.
+- Pins, verdicts, planted questions, answers, and reviewer identity.
+- Every option in each declared page-state control.
+- The exact visible state selections captured when each new pin was created.
+
+The packet deliberately excludes cookies, unrelated localStorage, IP address, geolocation, form
+values, console logs, and network logs.
 
 ## Use On Any Page
 
@@ -46,13 +67,17 @@ Pages can optionally provide:
 
 - `<meta name="pd-version" content="N">` to mark page versions.
 - A visible `.stamp` containing `vN` as a fallback version source.
-- `data-pd-state="Label"` on state groups whose active child should be captured with pins.
+- `data-pd-state="Label"` on state groups whose complete option list should be exported and whose
+  active visible choice should be captured with each pin.
+- Optional `data-pd-value="stable-id"` on each state option. Without it, Pindrop uses native
+  `value`, element `id`, or normalized visible text.
 
 ## Agent Pickup
 
 The pickup contract is open: any browser automation agent can collect and write back pins on a site
-it reviews. See [SPEC.md](SPEC.md#6--agent-pickup-contract-public--any-agent-with-a-browser-can-implement-it)
-for the storage keys and write-back lifecycle.
+it reviews. Agents may read same-browser storage or consume an uploaded `.pindrop.json` packet. See
+[SPEC.md](SPEC.md#6--agent-pickup-contract-public--any-agent-with-a-browser-can-implement-it) for
+the storage keys, packet validation, and write-back lifecycle.
 
 ## Status And Rights
 

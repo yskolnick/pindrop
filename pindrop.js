@@ -145,6 +145,76 @@
     return parts.join(' · ');
   }
 
+  function cleanText(el) {
+    var label = el.labels && el.labels.length ? el.labels[0].textContent : '';
+    return ((el.getAttribute && el.getAttribute('aria-label')) || el.textContent || label || '')
+      .trim().replace(/\s+/g, ' ');
+  }
+  function isVisible(el) { return !!(el && el.getClientRects && el.getClientRects().length); }
+  function optionSelected(el) {
+    return el.getAttribute('aria-pressed') === 'true' ||
+      el.getAttribute('aria-selected') === 'true' ||
+      el.getAttribute('data-active') === 'true' ||
+      !!el.checked || !!el.selected;
+  }
+  function optionId(el, label) {
+    return el.getAttribute('data-pd-value') || el.value || el.id ||
+      label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+  function stateOptions(group) {
+    var found = group.querySelectorAll(
+      '[data-pd-value],button,[role="option"],[role="tab"],input,select option,[aria-pressed],[aria-selected],[data-active]');
+    var out = [], seen = {};
+    for (var i = 0; i < found.length; i++) {
+      var label = cleanText(found[i]);
+      if (!label) continue;
+      var id = optionId(found[i], label);
+      if (!id || seen[id]) continue;
+      seen[id] = true;
+      out.push({ id: id, label: label, selectedAtExport: optionSelected(found[i]) });
+    }
+    return out;
+  }
+  function stateScope(group) {
+    var scoped = group.closest && group.closest('[id]');
+    return scoped ? '#' + scoped.id : location.hash || '(page)';
+  }
+  function stateCatalog() {
+    var groups = document.querySelectorAll('[data-pd-state]'), out = [];
+    for (var i = 0; i < groups.length; i++) {
+      out.push({
+        id: 'state-' + (i + 1),
+        label: groups[i].getAttribute('data-pd-state') || '',
+        selector: cssPath(groups[i]),
+        scope: stateScope(groups[i]),
+        visibleAtExport: isVisible(groups[i]),
+        options: stateOptions(groups[i])
+      });
+    }
+    return out;
+  }
+  function capturePinContext() {
+    var catalog = stateCatalog(), states = [];
+    for (var i = 0; i < catalog.length; i++) {
+      if (!catalog[i].visibleAtExport) continue;
+      var selected = [];
+      for (var j = 0; j < catalog[i].options.length; j++) {
+        var option = catalog[i].options[j];
+        if (option.selectedAtExport) selected.push({ id: option.id, label: option.label });
+      }
+      if (selected.length) states.push({
+        stateId: catalog[i].id,
+        label: catalog[i].label,
+        selected: selected
+      });
+    }
+    return {
+      url: location.href,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      states: states
+    };
+  }
+
   function cssPath(el) {
     var parts = [];
     while (el && el.nodeType === 1 && el !== document.body && parts.length < 6) {
@@ -263,7 +333,7 @@
           v: 2, id: pinId(), t: Date.now(),
           xr: x / document.documentElement.scrollWidth, y: y, near: nearText(x, y),
           note: note, w: window.innerWidth, state: captureState(), ver: pageVer(),
-          who: whoName() || undefined, anchor: anchorAt(x, y)
+          who: whoName() || undefined, anchor: anchorAt(x, y), context: capturePinContext()
         }));
         save(); render();
       }
@@ -421,6 +491,194 @@
     return out;
   }
 
+  function mediaMatches(query) {
+    try { return !!(window.matchMedia && window.matchMedia(query).matches); } catch (e) { return false; }
+  }
+  function browserInfo() {
+    var ua = navigator.userAgent || '', name = '', version = '', match;
+    if ((match = ua.match(/Edg\/([\d.]+)/))) { name = 'Edge'; version = match[1]; }
+    else if ((match = ua.match(/(?:Chrome|CriOS)\/([\d.]+)/))) { name = 'Chrome'; version = match[1]; }
+    else if ((match = ua.match(/(?:Firefox|FxiOS)\/([\d.]+)/))) { name = 'Firefox'; version = match[1]; }
+    else if (/Safari\//.test(ua) && (match = ua.match(/Version\/([\d.]+)/))) { name = 'Safari'; version = match[1]; }
+    var data = navigator.userAgentData, brands = [];
+    if (data && data.brands) {
+      for (var i = 0; i < data.brands.length; i++) {
+        brands.push({ brand: data.brands[i].brand, version: data.brands[i].version });
+      }
+    }
+    return {
+      name: name,
+      version: version,
+      userAgent: ua,
+      brands: brands,
+      mobile: data && typeof data.mobile === 'boolean' ? data.mobile : /Mobi|Android|iPhone|iPad/i.test(ua)
+    };
+  }
+  function captureEnvironment() {
+    var root = document.documentElement || {}, screenInfo = window.screen || {};
+    var orientation = screenInfo.orientation || {};
+    var uaData = navigator.userAgentData || {};
+    var languages = navigator.languages ? Array.prototype.slice.call(navigator.languages) : [];
+    var points = navigator.maxTouchPoints || 0;
+    return {
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        scrollWidth: root.scrollWidth || 0,
+        scrollHeight: root.scrollHeight || 0
+      },
+      screen: {
+        width: screenInfo.width == null ? null : screenInfo.width,
+        height: screenInfo.height == null ? null : screenInfo.height,
+        availWidth: screenInfo.availWidth == null ? null : screenInfo.availWidth,
+        availHeight: screenInfo.availHeight == null ? null : screenInfo.availHeight,
+        orientationType: orientation.type || null,
+        orientationAngle: orientation.angle == null ? null : orientation.angle
+      },
+      display: {
+        devicePixelRatio: window.devicePixelRatio || 1,
+        colorScheme: mediaMatches('(prefers-color-scheme: dark)') ? 'dark' : 'light',
+        reducedMotion: mediaMatches('(prefers-reduced-motion: reduce)')
+      },
+      browser: browserInfo(),
+      system: {
+        platform: navigator.platform || '',
+        uaPlatform: uaData.platform || '',
+        language: navigator.language || '',
+        languages: languages,
+        touch: points > 0 || 'ontouchstart' in window,
+        maxTouchPoints: points
+      }
+    };
+  }
+  function reviewId() {
+    return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+  function buildReviewPacket() {
+    var buckets = allBuckets(), questions = allQuestions(), verdicts = getVerdicts();
+    var pinsOut = {};
+    for (var i = 0; i < buckets.length; i++) pinsOut[buckets[i].variant] = buckets[i].pins;
+    return {
+      format: 'pindrop-review',
+      formatVersion: 1,
+      reviewId: reviewId(),
+      exportedAt: new Date().toISOString(),
+      reviewer: whoName(),
+      page: {
+        url: location.href,
+        title: document.title || '',
+        version: pageVer(),
+        pathname: location.pathname,
+        query: location.search,
+        hash: location.hash
+      },
+      environment: captureEnvironment(),
+      stateCatalog: stateCatalog(),
+      pins: pinsOut,
+      verdicts: verdicts,
+      questions: questions,
+      summary: buildCopyAll(buckets, verdicts, questions, ctxNow())
+    };
+  }
+  function reviewFilename(packet) {
+    var host = (location.hostname || 'page').replace(/[^a-z0-9.-]+/gi, '-');
+    return 'pindrop-' + host + '-' + packet.exportedAt.slice(0, 10) + '-' + packet.reviewId + '.json';
+  }
+  function reviewFile(packet) {
+    return new File([JSON.stringify(packet, null, 2)], reviewFilename(packet), { type: 'application/json' });
+  }
+  function downloadReview(packet) {
+    var file = reviewFile(packet);
+    var url = URL.createObjectURL(file);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+    return file;
+  }
+  function openSummary(text) {
+    var url = waUrl(text);
+    var win = window.open(url, '_blank');
+    if (!win) location.href = url;
+  }
+  function shareReview(packet) {
+    var file = reviewFile(packet), canShare = false;
+    try {
+      canShare = !!(navigator.share && navigator.canShare && navigator.canShare({ files: [file] }));
+    } catch (e) {}
+    if (canShare) {
+      return navigator.share({ text: packet.summary, files: [file] }).then(
+        function () { return { mode: 'native' }; },
+        function (error) {
+          if (error && error.name === 'AbortError') return { mode: 'cancelled' };
+          return { mode: 'error', error: error };
+        }
+      );
+    }
+    try {
+      downloadReview(packet);
+      openSummary(packet.summary);
+      return Promise.resolve({ mode: 'fallback' });
+    } catch (error) {
+      return Promise.resolve({ mode: 'error', error: error });
+    }
+  }
+  function packetStats(packet) {
+    var notes = 0, unanswered = 0, variants = {};
+    Object.keys(packet.pins).forEach(function (key) {
+      notes += packet.pins[key].length;
+      if (packet.pins[key].length) variants[key] = true;
+    });
+    Object.keys(packet.questions).forEach(function (key) {
+      for (var i = 0; i < packet.questions[key].length; i++) {
+        if (!packet.questions[key][i].answer) unanswered++;
+      }
+      if (packet.questions[key].length) variants[key] = true;
+    });
+    Object.keys(packet.verdicts).forEach(function (key) { variants[key] = true; });
+    return { notes: notes, unanswered: unanswered, variants: Object.keys(variants).length };
+  }
+  function openFinish() {
+    closePop();
+    var old = document.querySelector('.pd-finish');
+    if (old) old.remove();
+    var packet = buildReviewPacket(), stats = packetStats(packet);
+    var sheet = document.createElement('div');
+    sheet.className = 'pd-form pd-finish';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-label', 'Finish review');
+    sheet.innerHTML = '<h2>Finish review</h2>' +
+      '<p class="pd-note">' + stats.notes + (stats.notes === 1 ? ' note' : ' notes') +
+      ' across ' + stats.variants + (stats.variants === 1 ? ' variant' : ' variants') + '</p>' +
+      '<p class="pd-meta">' + stats.unanswered + (stats.unanswered === 1 ? ' unanswered question' : ' unanswered questions') +
+      ' · Full page URL included</p>' +
+      '<div class="r pd-finish-actions"><button type="button" class="pd-close-finish">Close</button>' +
+      '<button type="button" class="pd-send-summary">Send summary</button>' +
+      '<button type="button" class="pd-download-review">Download packet</button>' +
+      '<button type="button" class="p pd-share-review">Share review</button></div>' +
+      '<p class="pd-meta pd-finish-status" aria-live="polite"></p>';
+    document.body.appendChild(sheet);
+    sheet.style.bottom = (24 + (bar && bar.getBoundingClientRect ? bar.getBoundingClientRect().height : 0)) + 'px';
+    var status = sheet.querySelector('.pd-finish-status');
+    sheet.querySelector('.pd-close-finish').addEventListener('click', function () { sheet.remove(); });
+    sheet.querySelector('.pd-send-summary').addEventListener('click', function () { openSummary(packet.summary); });
+    sheet.querySelector('.pd-download-review').addEventListener('click', function () {
+      try { downloadReview(packet); status.textContent = 'Packet downloaded'; }
+      catch (e) { status.textContent = 'Could not download packet'; }
+    });
+    sheet.querySelector('.pd-share-review').addEventListener('click', function () {
+      shareReview(packet).then(function (result) {
+        if (result.mode === 'native') status.textContent = 'Review shared';
+        else if (result.mode === 'cancelled') status.textContent = '';
+        else if (result.mode === 'fallback') status.textContent = 'Packet downloaded · attach it to your message';
+        else status.textContent = 'Could not share · use Download packet and Send summary';
+      });
+    });
+  }
+
   function armed() {
     return !!(queryArmed || ssGet('pd-on') || lsGet(keyFor()) ||
       lsGet('pd-q:' + location.pathname + location.hash));
@@ -457,6 +715,9 @@
       'font:inherit;background:#fff;color:#221F1B}' +
       '.pd-form .r{display:flex;gap:6px;justify-content:flex-end;margin-top:7px}' +
       '.pd-form button{font:700 12px/1 ui-sans-serif,system-ui,sans-serif;border:0;border-radius:8px;padding:7px 11px;cursor:pointer;background:#F1EBE2;color:#221F1B}' +
+      '.pd-finish{position:fixed;left:auto;right:16px;top:auto;bottom:72px;width:min(330px,calc(100vw - 32px));box-sizing:border-box}' +
+      '.pd-finish h2{font:800 16px/1.2 ui-sans-serif,system-ui,sans-serif;margin:0 0 8px}' +
+      '.pd-finish .pd-finish-actions{flex-wrap:wrap}' +
       '.pd-meta{font:600 11px/1.3 ui-sans-serif,system-ui,sans-serif;color:#8a8378;margin-bottom:4px}' +
       '.pd-note{margin:0 0 8px}' +
       '.pd-form .del{background:#F1EBE2;color:#A82D46}' +
@@ -474,6 +735,7 @@
       '<button type="button" class="pd-add">+ Add note</button>' +
       '<button type="button" class="pd-copy">Copy</button>' +
       '<button type="button" class="pd-copyall">Copy all</button>' +
+      '<button type="button" class="pd-finish-btn">Finish review</button>' +
       '<button type="button" class="pd-send">Send</button>' +
       '<button type="button" class="pd-clear">Clear</button>' +
       '<button type="button" class="pd-x" aria-label="Hide feedback bar">✕</button>';
@@ -523,6 +785,8 @@
       writeOut(buildCopyAll(buckets, getVerdicts(), qsAll, ctxNow()), 'Copied all ' + total + '!');
     });
 
+    bar.querySelector('.pd-finish-btn').addEventListener('click', openFinish);
+
     bar.querySelector('.pd-send').addEventListener('click', function () {
       var buckets = allBuckets();
       var qsAll = allQuestions();
@@ -568,7 +832,7 @@
     });
   }
 
-  var api = { version: '2.0.0', mounted: false, mount: mount };
+  var api = { version: '2.1.0', mounted: false, mount: mount, buildReviewPacket: buildReviewPacket };
   window.pindrop = api;
   if (window.__PINDROP_TEST__) window.PINDROP = {
     keyFor: keyFor,
@@ -590,6 +854,14 @@
     loadQuestions: loadQuestions,
     allQuestions: allQuestions,
     saveAnswer: saveAnswer,
+    stateCatalog: stateCatalog,
+    capturePinContext: capturePinContext,
+    captureEnvironment: captureEnvironment,
+    buildReviewPacket: buildReviewPacket,
+    reviewFilename: reviewFilename,
+    reviewFile: reviewFile,
+    downloadReview: downloadReview,
+    shareReview: shareReview,
     cssPath: cssPath,
     anchorAt: anchorAt,
     pinXY: pinXY
